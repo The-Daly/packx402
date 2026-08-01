@@ -1,0 +1,91 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files - NEVER commit real secrets
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.test.local
+!.env.example
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# --- Pack402 secrets & sensitive data (never commit) ---
+*.pem
+*.key
+*.p12
+*secret*
+*Secret*
+!**/secrets-config.example.*
+wallet-keys/
+private-keys/
+credentials.json
+*credentials*.json
+service-account*.json
+supplier-credentials/
+*.sqlite
+*.db
+*-export.csv
+*-export.json
+db-dump/
+*.dump
+*.sql.gz
+customer-data/
+shipping-exports/
+
+# logs (may contain sensitive request data)
+*.log
+logs/
+
+# playwright / vitest artifacts
+/playwright-report/
+/test-results/
+/coverage/
+
+# drizzle
+drizzle/meta/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
