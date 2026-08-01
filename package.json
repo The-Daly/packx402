@@ -1,5 +1,5 @@
 {
-  "name": "pack402",
+  "name": "packx402",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -39,7 +39,10 @@
     "x402-next": "1.2.0",
     "ioredis": "6.0.0",
     "jose": "6.2.7",
-    "nanoid": "6.0.0"
+    "nanoid": "6.0.0",
+    "server-only": "0.0.1",
+    "dotenv": "17.4.2",
+    "tweetnacl": "1.0.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

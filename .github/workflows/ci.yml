@@ -1,0 +1,195 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  install:
+    name: Install dependencies (locked)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+  format:
+    name: Format check
+    runs-on: ubuntu-latest
+    needs: install
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run format:check
+
+  lint:
+    name: ESLint
+    runs-on: ubuntu-latest
+    needs: install
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+
+  typecheck:
+    name: Strict TypeScript
+    runs-on: ubuntu-latest
+    needs: install
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+
+  unit-tests:
+    name: Unit & integration tests
+    runs-on: ubuntu-latest
+    needs: install
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run test
+
+  build:
+    name: Production build
+    runs-on: ubuntu-latest
+    needs: install
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+        env:
+          SESSION_SECRET: ci-placeholder-session-secret-32-chars-min
+          FIELD_ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000000
+          DATABASE_URL: postgres://ci:ci@localhost:5432/ci
+          REDIS_URL: redis://localhost:6379
+
+  db-schema-check:
+    name: Database schema validation
+    runs-on: ubuntu-latest
+    needs: install
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: packx402
+          POSTGRES_PASSWORD: packx402
+          POSTGRES_DB: packx402
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U packx402 -d packx402"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Fail if the checked-in schema has ungenerated migrations
+        run: npx drizzle-kit generate --name ci-schema-check-should-be-empty
+        env:
+          DATABASE_URL: postgres://packx402:packx402@localhost:5432/packx402
+      - name: Verify no new migration file was produced
+        run: |
+          if [ -n "$(git status --porcelain drizzle/)" ]; then
+            echo "Schema changed without a committed migration. Run 'npm run db:generate' and commit the result."
+            git status --porcelain drizzle/
+            exit 1
+          fi
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dependency-audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    needs: install
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm audit --audit-level=critical
+
+  sbom:
+    name: Software bill of materials
+    runs-on: ubuntu-latest
+    needs: install
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx @cyclonedx/cyclonedx-npm --output-file sbom.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.json
+
+  e2e:
+    name: Playwright end-to-end tests
+    runs-on: ubuntu-latest
+    needs: install
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Check for Playwright tests
+        id: check
+        run: echo "has_tests=$(find tests -name '*.spec.ts' 2>/dev/null | wc -l)" >> "$GITHUB_OUTPUT"
+      - name: Install Playwright browsers
+        if: steps.check.outputs.has_tests != '0'
+        run: npx playwright install --with-deps
+      - name: Run Playwright tests
+        if: steps.check.outputs.has_tests != '0'
+        run: npm run test:e2e
+      - name: No Playwright tests yet
+        if: steps.check.outputs.has_tests == '0'
+        run: echo "No Playwright specs found yet — see PROJECT_STATUS.md. Skipping without failing the build."
