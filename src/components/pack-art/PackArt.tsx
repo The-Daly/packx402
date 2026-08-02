@@ -22,6 +22,11 @@ export interface PackArtProps {
   locked?: boolean;
   featured?: boolean;
   animationState?: "idle" | "opening" | "opened";
+  /** Shows the tier's torn-open art variant (`/packs/{tierKey}-torn.png`) instead of the
+   * closed-pack art — used for the brief moment right after the rip gesture commits, before
+   * the reveal wheel spins. Falls back to the closed-pack art if no torn variant exists yet
+   * for this tier (see docs/ASSET_MANIFEST.md — not every tier has one). */
+  torn?: boolean;
   className?: string;
 }
 
@@ -52,12 +57,16 @@ export function PackArt({
   locked = false,
   featured = false,
   animationState = "idle",
+  torn = false,
   className,
 }: PackArtProps) {
   const [imageFailed, setImageFailed] = useState(false);
+  const [tornImageFailed, setTornImageFailed] = useState(false);
   const treatment = getTierTreatment(tierKey);
   const resolvedAccent = accentColor ?? treatment.accentColor;
-  const resolvedSrc = imageSrc ?? `/packs/${tierKey}.png`;
+  const baseSrc = imageSrc ?? `/packs/${tierKey}.png`;
+  const showTorn = torn && !tornImageFailed;
+  const resolvedSrc = showTorn ? `/packs/${tierKey}-torn.png` : baseSrc;
   const showRealImage = !imageFailed;
 
   const altText = `${tierName} pack — PACK402, Only the Best Packx${locked ? " (locked)" : ""}`;
@@ -85,7 +94,7 @@ export function PackArt({
           priority={priority}
           sizes={SIZE_SIZES_ATTR[size]}
           className="object-cover"
-          onError={() => setImageFailed(true)}
+          onError={() => (showTorn ? setTornImageFailed(true) : setImageFailed(true))}
         />
       )}
 

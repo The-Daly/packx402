@@ -105,6 +105,7 @@ export function OpeningStage({
           size="detail"
           priority
           animationState="opening"
+          torn
         />
       ) : effectivePhase === "revealing" ? (
         <div className="relative flex justify-center">

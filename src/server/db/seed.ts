@@ -15,9 +15,11 @@ import { eq } from "drizzle-orm";
  * Pool entries follow the six-rarity structure in
  * src/server/packs/rarity-bands.ts (Common/Uncommon/Rare/Epic/Legendary/Grail, fixed odds,
  * price bands scaled to each tier's own price) — one representative fixture per rarity,
- * picked from the mock fixture ladder. A real supplier catalog would curate multiple
- * listings per band; the mock ladder only has ~20 fixtures total, so this is a simple,
- * transparent stand-in, not a claim about real-world pull rates.
+ * picked from the mock fixture ladder. The ladder (src/server/suppliers/cardtrader/fixtures.ts)
+ * is 90 real Pokemon cards with real 2026-08-02 tcgplayer market prices, spanning $0.33-$1,300 —
+ * still a mock CardTrader listing (see AGENTS.md), but card identity/pricing is real, not
+ * hand-invented. A real supplier catalog would curate multiple listings per band; this is a
+ * simple, transparent stand-in, not a claim about real-world pull rates.
  *
  * Run with: npm run db:seed (requires `docker compose up -d && npm run db:migrate` first).
  */
@@ -143,7 +145,7 @@ async function main() {
       .insert(poolVersions)
       .values({
         packTierId: tierRow.id,
-        versionLabel: "2026-08-02.1", // bumped: pool structure changed to the six-rarity system
+        versionLabel: "2026-08-02.2", // bumped: fixture ladder refreshed with real Pokemon TCG market data
         isPromotional: false,
         poolHash,
         oddsHash,

@@ -168,6 +168,29 @@ run db:migrate && npm run db:seed` to verify.
   working `/api/fairness/verify` endpoint), odds library + JSON download, and an
   opening-theater page at `/packs/[tierKey]/open` (see below). The same `InteractivePackDemo`
   also powers the dev-only `/dev/rip-preview` page (useful when Postgres isn't running).
+- **Bonus-flip mechanic verified correct**: confirmed the coin-flip visual (`CoinFlip.tsx`)
+  never rolls its own odds — it only animates the server's already-determined 4% result
+  (`deriveBonusFlipHit` in `engine.ts`). The only place a different rate shows is the
+  landing-page demo, which intentionally uses ~40% (clearly commented as demo-only) so the
+  flourish is visible while clicking around instead of a 1-in-25 real rate.
+- **Torn-open pack art**: 4 of 14 tiers (Spark, Scout, Obsidian, Mythic — the tiers used in
+  the landing-page demo) now have a real Higgsfield-generated torn-pack render at
+  `public/packs/{tier}-torn.png`, shown briefly during the `"tearing"` phase right after the
+  rip gesture commits, before the reveal wheel spins (see `docs/ASSET_MANIFEST.md` and
+  `docs/HIGGSFIELD_PROMPTS.md`). Uses a clean straight tear line (not jagged) per explicit
+  direction. `PackArt`'s new `torn` prop falls back to the closed-pack art for any tier
+  without one yet — the remaining 10 tiers are a drop-in follow-up, zero code changes
+  needed. Verified the asset request succeeds (200 OK network log) during a live rip on the
+  landing-page demo; the CSS-only rip gesture animation itself (`RipToOpen.tsx`) was also
+  switched from a jagged zigzag clip-path to a single straight seam line, per the same
+  feedback.
+- **Mock CardTrader fixture ladder refreshed with live market data**: replaced the
+  ~20-card hand-authored mock inventory (`src/server/suppliers/cardtrader/fixtures.ts`)
+  with 110 real cards — 90 Pokemon (Base Set/Gym Heroes/Neo Genesis via api.pokemontcg.io)
+  and 20 Yu-Gi-Oh (via db.ygoprodeck.com), each carrying that card's real market price at
+  fetch time (2026-08-02 snapshot), spanning $0.08-$1,300. CardTrader itself is still mock
+  mode (see AGENTS.md) — only the card identity/pricing is now real instead of invented.
+  `db:seed`'s pool-version label bumped to `2026-08-02.2` to reflect the refresh.
 - **Opening theater** (`/packs/[tierKey]/open`): real page, not a mock. Pack shelf →
   drag-to-rip gesture (`RipToOpen`) → calls the real `/api/x402/algorand/v1/packs/open`
   endpoint to create a pack offer → **Pera Wallet is now really wired up**

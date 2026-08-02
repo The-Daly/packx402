@@ -66,6 +66,13 @@ export function InteractivePackDemo({ className }: InteractivePackDemoProps) {
     setWheelKey((k) => k + 1);
   }
 
+  function handleRipped() {
+    // Mirrors the real opening flow (OpenPackClient.handleRipped): show the torn-pack art
+    // briefly before the reveal wheel spins, rather than jumping straight to "revealing".
+    setPhase("tearing");
+    window.setTimeout(() => setPhase("revealing"), 700);
+  }
+
   function handleRevealSettled() {
     setPhase("resolved");
     // Demo-only: real odds are a fixed 4% derived server-side from the committed
@@ -97,7 +104,7 @@ export function InteractivePackDemo({ className }: InteractivePackDemoProps) {
               cardName="Charizard (demo)"
               resolvedImage={DEMO_RESOLVED_IMAGE}
               possibleCards={DEMO_POSSIBLE_CARDS}
-              onRipped={() => setPhase("revealing")}
+              onRipped={handleRipped}
               onSpinComplete={handleRevealSettled}
             />
 

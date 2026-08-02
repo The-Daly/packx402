@@ -62,33 +62,16 @@ function playTearSound() {
 
 const SPARKLE_POSITIONS = [12, 28, 45, 62, 78, 90]; // percent across the top tear seam
 
-// Builds a jagged, torn-paper-style clip-path boundary instead of a clean straight cut —
-// both pieces share the exact same zigzag line so their edges interlock with no gap/overlap.
-const ZIGZAG_TEETH = 9;
-const ZIGZAG_DEPTH_PERCENT = 3.5;
-
-function zigzagPoints(seamPercent: number): string {
-  const points: string[] = [];
-  for (let i = 0; i <= ZIGZAG_TEETH; i++) {
-    const x = (i / ZIGZAG_TEETH) * 100;
-    const y = seamPercent + (i % 2 === 0 ? 0 : ZIGZAG_DEPTH_PERCENT);
-    points.push(`${x}% ${y}%`);
-  }
-  return points.join(", ");
-}
-
+// A clean, straight-line tear seam — both pieces share the exact same horizontal line so
+// their edges meet with no gap/overlap.
 function topPieceClipPath(seamPercent: number): string {
-  // From the top-left corner, across the top edge, down the jagged seam, back to start.
-  return `polygon(0% 0%, 100% 0%, ${zigzagPoints(seamPercent)
-    .split(", ")
-    .reverse()
-    .join(", ")})`;
+  return `polygon(0% 0%, 100% 0%, 100% ${seamPercent}%, 0% ${seamPercent}%)`;
 }
 
 function bottomPieceClipPath(seamPercent: number): string {
-  // The jagged seam, then down around the rest of the pack — the exact complement of
-  // the top piece, so releasing early and springing back shows no seam at all.
-  return `polygon(${zigzagPoints(seamPercent)}, 100% 100%, 0% 100%)`;
+  // The exact complement of the top piece, so releasing early and springing back shows
+  // no seam at all.
+  return `polygon(0% ${seamPercent}%, 100% ${seamPercent}%, 100% 100%, 0% 100%)`;
 }
 
 function TearSparkles({ active }: { active: boolean }) {
