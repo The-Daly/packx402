@@ -24,8 +24,10 @@ import {
 } from "@/server/config/pack-tiers";
 import {
   commitServerSeed,
+  deriveBonusFlipHit,
   generateClientNonce,
   generateServerSeed,
+  selectBonusPoolEntry,
   selectPoolEntry,
 } from "@/server/fairness/engine";
 import { encryptField, decryptField } from "@/server/crypto/field-encryption";
@@ -244,10 +246,16 @@ export class PaymentSettlementError extends Error {
  * on the payment's on-chain identifier: a retried request with the same settled
  * transaction returns the existing Rip rather than re-running selection.
  */
+export interface SettleOfferResult {
+  ripId: string;
+  poolEntryId: string;
+  bonusRip: { ripId: string; poolEntryId: string } | null;
+}
+
 export async function settleOfferAndOpen(params: {
   offerId: string;
   xPaymentHeader: string;
-}): Promise<{ ripId: string; poolEntryId: string }> {
+}): Promise<SettleOfferResult> {
   const [offer] = await db
     .select()
     .from(packOffers)
@@ -256,13 +264,17 @@ export async function settleOfferAndOpen(params: {
   if (!offer) throw new PaymentSettlementError("offer_not_found", "Offer not found");
 
   if (offer.status === "OPENED" || offer.status === "PAID") {
-    const [existingRip] = await db
-      .select()
-      .from(rips)
-      .where(eq(rips.packOfferId, offer.id))
-      .limit(1);
-    if (existingRip) {
-      return { ripId: existingRip.id, poolEntryId: existingRip.poolEntryId };
+    const existingRips = await db.select().from(rips).where(eq(rips.packOfferId, offer.id));
+    const existingPrimary = existingRips.find((r) => r.kind === "primary");
+    if (existingPrimary) {
+      const existingBonus = existingRips.find((r) => r.kind === "bonus_flip");
+      return {
+        ripId: existingPrimary.id,
+        poolEntryId: existingPrimary.poolEntryId,
+        bonusRip: existingBonus
+          ? { ripId: existingBonus.id, poolEntryId: existingBonus.poolEntryId }
+          : null,
+      };
     }
   }
   if (
@@ -330,8 +342,12 @@ export async function settleOfferAndOpen(params: {
       settleResult.errorReason ?? "settlement failed",
     );
   }
+  // Narrowed, single-assignment locals — nested closures below (createRip) don't otherwise
+  // retain this null-check's narrowing of the outer `settleResult` binding.
+  const settledTxHashOrPaymentId = settleResult.txHashOrPaymentId;
+  const settledChainRandomnessInput = settleResult.chainRandomnessInput;
 
-  const idempotencyKey = `${offer.id}:${settleResult.txHashOrPaymentId}`;
+  const idempotencyKey = `${offer.id}:${settledTxHashOrPaymentId}`;
   const [payment] = await db
     .insert(payments)
     .values({
@@ -344,7 +360,7 @@ export async function settleOfferAndOpen(params: {
       payerAddress: verifyResult.payerAddress,
       recipientAddress: offer.merchantAddress,
       tokenIdentifier: requirements.asset,
-      txHashOrPaymentId: settleResult.txHashOrPaymentId,
+      txHashOrPaymentId: settledTxHashOrPaymentId,
       idempotencyKey,
       settledAt: new Date(),
     })
@@ -357,7 +373,7 @@ export async function settleOfferAndOpen(params: {
       await db
         .select()
         .from(payments)
-        .where(eq(payments.txHashOrPaymentId, settleResult.txHashOrPaymentId))
+        .where(eq(payments.txHashOrPaymentId, settledTxHashOrPaymentId))
         .limit(1)
     )[0];
 
@@ -375,6 +391,9 @@ export async function settleOfferAndOpen(params: {
   if (!poolVersion || entries.length === 0) {
     throw new PaymentSettlementError("pool_unavailable", "Pool version has no entries");
   }
+  // Narrowed, single-assignment locals — nested closures below (createRip) don't otherwise
+  // retain the null-check narrowing TypeScript applies to the outer `poolVersion` binding.
+  const resolvedPoolVersion = poolVersion;
 
   const revealedServerSeed = decryptField(offer.serverSeedEncrypted);
   const selection = selectPoolEntry(
@@ -382,9 +401,9 @@ export async function settleOfferAndOpen(params: {
     {
       revealedServerSeed,
       clientNonce: offer.clientNonce,
-      paymentIdentifier: settleResult.txHashOrPaymentId,
-      chainRandomnessInput: settleResult.chainRandomnessInput,
-      poolHash: poolVersion.poolHash,
+      paymentIdentifier: settledTxHashOrPaymentId,
+      chainRandomnessInput: settledChainRandomnessInput,
+      poolHash: resolvedPoolVersion.poolHash,
     },
   );
   const selectedEntry = entries.find((e) => e.id === selection.selectedEntryId);
@@ -393,80 +412,135 @@ export async function settleOfferAndOpen(params: {
   }
 
   // Mark the pool version immutable on its first paid use (spec section 19).
-  if (!poolVersion.isImmutable) {
+  if (!resolvedPoolVersion.isImmutable) {
     await db
       .update(poolVersions)
       .set({ isImmutable: true })
-      .where(eq(poolVersions.id, poolVersion.id));
+      .where(eq(poolVersions.id, resolvedPoolVersion.id));
   }
 
-  const [rip] = await db
-    .insert(rips)
-    .values({
-      packOfferId: offer.id,
-      paymentId: paymentRow.id,
-      poolEntryId: selectedEntry.id,
-      cardName: selectedEntry.cardName,
-      setName: selectedEntry.setName,
-      cardNumber: selectedEntry.cardNumber,
-      finish: selectedEntry.finish,
-      condition: selectedEntry.minCondition,
-      gradeLabel: selectedEntry.gradeLabel,
-      referenceValueUsdcBaseUnits: selectedEntry.referenceValueUsdcBaseUnits,
-      referenceValueAsOf: selectedEntry.referenceValueAsOf,
-    })
-    .onConflictDoNothing({ target: rips.packOfferId })
-    .returning();
+  async function createRip(
+    kind: "primary" | "bonus_flip",
+    entry: (typeof entries)[number],
+    proofFields: {
+      combinedSeedHash: string;
+      selectionRoll: string;
+      clientNonce: string;
+    },
+  ) {
+    const [inserted] = await db
+      .insert(rips)
+      .values({
+        packOfferId: offer.id,
+        paymentId: paymentRow.id,
+        kind,
+        poolEntryId: entry.id,
+        cardName: entry.cardName,
+        setName: entry.setName,
+        cardNumber: entry.cardNumber,
+        finish: entry.finish,
+        condition: entry.minCondition,
+        gradeLabel: entry.gradeLabel,
+        referenceValueUsdcBaseUnits: entry.referenceValueUsdcBaseUnits,
+        referenceValueAsOf: entry.referenceValueAsOf,
+      })
+      .onConflictDoNothing({ target: [rips.packOfferId, rips.kind] })
+      .returning();
 
-  const ripRow =
-    rip ?? (await db.select().from(rips).where(eq(rips.packOfferId, offer.id)).limit(1))[0];
+    const ripRow =
+      inserted ??
+      (
+        await db
+          .select()
+          .from(rips)
+          .where(and(eq(rips.packOfferId, offer.id), eq(rips.kind, kind)))
+          .limit(1)
+      )[0];
 
-  await db
-    .insert(fairnessProofs)
-    .values({
+    const fairnessProofValues: typeof fairnessProofs.$inferInsert = {
       ripId: ripRow.id,
-      poolVersionId: poolVersion.id,
-      poolHash: poolVersion.poolHash,
-      oddsHash: poolVersion.oddsHash,
+      poolVersionId: resolvedPoolVersion.id,
+      poolHash: resolvedPoolVersion.poolHash,
+      oddsHash: resolvedPoolVersion.oddsHash,
       serverSeedCommitment: offer.serverSeedCommitment,
       revealedServerSeed,
-      clientNonce: offer.clientNonce,
-      paymentIdentifier: settleResult.txHashOrPaymentId,
-      chainRandomnessInput: settleResult.chainRandomnessInput,
-      combinedSeedHash: selection.combinedSeedHash,
-      selectionRoll: selection.selectionRoll,
-      selectedPoolEntryId: selectedEntry.id,
-    })
-    .onConflictDoNothing({ target: fairnessProofs.ripId });
+      clientNonce: proofFields.clientNonce,
+      paymentIdentifier: settledTxHashOrPaymentId,
+      chainRandomnessInput: settledChainRandomnessInput,
+      combinedSeedHash: proofFields.combinedSeedHash,
+      selectionRoll: proofFields.selectionRoll,
+      selectedPoolEntryId: entry.id,
+    };
+    await db
+      .insert(fairnessProofs)
+      .values(fairnessProofValues)
+      .onConflictDoNothing({ target: fairnessProofs.ripId });
+
+    // Queue the supplier purchase (spec sections 39-40). A worker process consumes this
+    // queue serially per supplier account — see docs/SUPPLIER_INTEGRATION.md. Not run
+    // inline here so a slow/failed supplier purchase never blocks the payment response.
+    if (entry.supplierListingId) {
+      const [listing] = await db
+        .select({
+          supplierId: supplierListings.supplierId,
+          priceUsdcBaseUnits: supplierListings.priceUsdcBaseUnits,
+        })
+        .from(supplierListings)
+        .where(eq(supplierListings.id, entry.supplierListingId))
+        .limit(1);
+      if (listing) {
+        await db
+          .insert(supplierPurchases)
+          .values({
+            supplierId: listing.supplierId,
+            supplierListingId: entry.supplierListingId,
+            ripId: ripRow.id,
+            idempotencyKey: `rip:${ripRow.id}`,
+            status: "queued",
+            expectedPriceUsdcBaseUnits: listing.priceUsdcBaseUnits,
+          })
+          .onConflictDoNothing({ target: supplierPurchases.idempotencyKey });
+      }
+    }
+
+    return ripRow;
+  }
+
+  const ripRow = await createRip("primary", selectedEntry, {
+    combinedSeedHash: selection.combinedSeedHash,
+    selectionRoll: selection.selectionRoll,
+    clientNonce: offer.clientNonce,
+  });
 
   await db.update(packOffers).set({ status: "OPENED" }).where(eq(packOffers.id, offer.id));
 
-  // Queue the supplier purchase (spec sections 39-40). A worker process consumes this
-  // queue serially per supplier account — see docs/SUPPLIER_INTEGRATION.md. Not run
-  // inline here so a slow/failed supplier purchase never blocks the payment response.
-  if (selectedEntry.supplierListingId) {
-    const [listing] = await db
-      .select({
-        supplierId: supplierListings.supplierId,
-        priceUsdcBaseUnits: supplierListings.priceUsdcBaseUnits,
-      })
-      .from(supplierListings)
-      .where(eq(supplierListings.id, selectedEntry.supplierListingId))
-      .limit(1);
-    if (listing) {
-      await db
-        .insert(supplierPurchases)
-        .values({
-          supplierId: listing.supplierId,
-          supplierListingId: selectedEntry.supplierListingId,
-          ripId: ripRow.id,
-          idempotencyKey: `rip:${ripRow.id}`,
-          status: "queued",
-          expectedPriceUsdcBaseUnits: listing.priceUsdcBaseUnits,
-        })
-        .onConflictDoNothing({ target: supplierPurchases.idempotencyKey });
+  // Bonus-flip mechanic: a fixed 4% chance, derived from the same committed seed as the
+  // primary pull (never client-side randomness) — see deriveBonusFlipHit/selectBonusPoolEntry
+  // in src/server/fairness/engine.ts. On a hit, the buyer keeps BOTH cards; nothing is paid
+  // twice, and it's independently verifiable exactly like the primary pull.
+  const selectionInput = {
+    revealedServerSeed,
+    clientNonce: offer.clientNonce,
+    paymentIdentifier: settledTxHashOrPaymentId,
+    chainRandomnessInput: settledChainRandomnessInput,
+    poolHash: resolvedPoolVersion.poolHash,
+  };
+  let bonusRip: { ripId: string; poolEntryId: string } | null = null;
+  if (deriveBonusFlipHit(selectionInput)) {
+    const bonusSelection = selectBonusPoolEntry(
+      entries.map((e) => ({ id: e.id, weight: e.weight })),
+      selectionInput,
+    );
+    const bonusEntry = entries.find((e) => e.id === bonusSelection.selectedEntryId);
+    if (bonusEntry) {
+      const bonusRipRow = await createRip("bonus_flip", bonusEntry, {
+        combinedSeedHash: bonusSelection.combinedSeedHash,
+        selectionRoll: bonusSelection.selectionRoll,
+        clientNonce: `${offer.clientNonce}|bonus_flip_pull`,
+      });
+      bonusRip = { ripId: bonusRipRow.id, poolEntryId: bonusEntry.id };
     }
   }
 
-  return { ripId: ripRow.id, poolEntryId: selectedEntry.id };
+  return { ripId: ripRow.id, poolEntryId: selectedEntry.id, bonusRip };
 }

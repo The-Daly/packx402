@@ -1,7 +1,7 @@
 # PackX402 — Project Status
 
-Last updated: 2026-08-01 (beta scaffold + PackArt visual system + opening theater +
-Google-only OAuth).
+Last updated: 2026-08-02 (beta scaffold + PackArt visual system + opening theater +
+Google-only OAuth + real bonus-flip mechanic + pack shelf).
 
 This document is the single source of truth for what is actually implemented, what is
 scaffolded but unverified, and what has not been started. Do not trust marketing language
@@ -84,6 +84,21 @@ production use.
   (`error: "eligibility_required"`), and `POST /api/auth/oauth/complete-eligibility`
   (tested indirectly via evaluateEligibility's existing 10 unit tests) is what a client
   calls to satisfy it. There is still no UI page for this — see next steps.
+- **Bonus-flip mechanic** (`deriveBonusFlipHit`/`selectBonusPoolEntry` in
+  `src/server/fairness/engine.ts`, wired into `settleOfferAndOpen`): a fixed 4% chance,
+  evaluated server-side on every completed pack opening from the same committed fairness
+  seed as the primary pull (never client-side randomness), of awarding a second real card
+  from the same pool. Real money/EV impact — see `docs/LEGAL_REVIEW_REQUIRED.md`'s new
+  note and `docs/FAIRNESS_PROTOCOL.md`'s bonus-flip addendum; **not yet disclosed** in the
+  pack-detail page's published odds table. Tested (4 new unit tests including a ~4%
+  distribution check over 5000 trials); the DB schema change (`rips.kind` +
+  `(packOfferId, kind)` composite unique index replacing the old single-column uniques) is
+  captured in `drizzle/0002_sturdy_synch.sql`, unverified against a live Postgres.
+- **Pack shelf** (`PackShelf.tsx`, replacing the old infinite carousel on the opening
+  page): uniform-size packs in a horizontally scrollable row, sorted ascending by price
+  left to right, each with its own price/pay button feeding into `PaymentMethodPanel`
+  (wallet — the one real, functional method — plus Apple Pay/PayPal shown realistically
+  but disabled, no merchant credentials configured for either).
 
 ## What's implemented but unverified against live infrastructure (🟡)
 

@@ -52,6 +52,16 @@ fixtures.ts`) are factual identifiers of real, third-party-owned cards being res
 - Confirm age-gate and self-exclusion mechanisms (`src/server/eligibility/policy.ts`,
   `self_exclusions` table) meet the jurisdiction-specific bar, not just the beta's
   18+/blocked-country baseline.
+- **Bonus-flip mechanic** (`deriveBonusFlipHit`/`selectBonusPoolEntry` in
+  `src/server/fairness/engine.ts`): a fixed 4% chance, evaluated on every completed pack
+  opening, of awarding a second real card from the same pool alongside the one paid for.
+  This changes the effective expected value/odds of every pack tier and must be disclosed
+  in the published odds alongside the base pool weights — it is not currently reflected in
+  the pack-detail page's probability-band table or `docs/FAIRNESS_PROTOCOL.md`'s public
+  description of the algorithm. Counsel should confirm this doesn't change PackX402's
+  gambling-regulation analysis (an unadvertised "extra" reward on a fixed-price purchase
+  may read differently than a disclosed-upfront mechanic) and that the 4% figure itself is
+  disclosed to buyers before purchase, not just discoverable after the fact.
 
 ## Data protection
 

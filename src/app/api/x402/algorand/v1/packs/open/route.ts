@@ -51,6 +51,44 @@ async function requireUserId(req: NextRequest): Promise<string | null> {
   return session?.userId ?? null;
 }
 
+async function loadRipWithImage(ripId: string) {
+  const [rip] = await db.select().from(rips).where(eq(rips.id, ripId)).limit(1);
+  if (!rip) return null;
+
+  const [joined] = await db
+    .select({
+      cardGame: poolEntries.cardGame,
+      supplierListingId: supplierListings.id,
+      supplierImageUsePermitted: supplierListings.imageUsePermitted,
+    })
+    .from(poolEntries)
+    .leftJoin(supplierListings, eq(supplierListings.id, poolEntries.supplierListingId))
+    .where(eq(poolEntries.id, rip.poolEntryId))
+    .limit(1);
+
+  const resolvedImage = await resolveCardImage({
+    cardGame: joined?.cardGame ?? "other",
+    cardName: rip.cardName,
+    setName: rip.setName,
+    cardNumber: rip.cardNumber,
+    supplierListingId: joined?.supplierListingId ?? null,
+    supplierImageUsePermitted: joined?.supplierImageUsePermitted ?? false,
+    certificationNumber: rip.gradeLabel,
+  });
+
+  return {
+    card: {
+      name: rip.cardName,
+      setName: rip.setName,
+      cardNumber: rip.cardNumber,
+      finish: rip.finish,
+      condition: rip.condition,
+      gradeLabel: rip.gradeLabel,
+    },
+    resolvedImage,
+  };
+}
+
 export async function POST(req: NextRequest) {
   const userId = await requireUserId(req);
   if (!userId) {
@@ -65,50 +103,28 @@ export async function POST(req: NextRequest) {
   if (offerIdParam && xPayment) {
     try {
       const result = await settleOfferAndOpen({ offerId: offerIdParam, xPaymentHeader: xPayment });
-      const [rip] = await db.select().from(rips).where(eq(rips.id, result.ripId)).limit(1);
       const [proof] = await db
         .select()
         .from(fairnessProofs)
         .where(eq(fairnessProofs.ripId, result.ripId))
         .limit(1);
 
-      let resolvedImage = null;
-      if (rip) {
-        const [joined] = await db
-          .select({
-            cardGame: poolEntries.cardGame,
-            supplierListingId: supplierListings.id,
-            supplierImageUsePermitted: supplierListings.imageUsePermitted,
-          })
-          .from(poolEntries)
-          .leftJoin(supplierListings, eq(supplierListings.id, poolEntries.supplierListingId))
-          .where(eq(poolEntries.id, rip.poolEntryId))
-          .limit(1);
-
-        resolvedImage = await resolveCardImage({
-          cardGame: joined?.cardGame ?? "other",
-          cardName: rip.cardName,
-          setName: rip.setName,
-          cardNumber: rip.cardNumber,
-          supplierListingId: joined?.supplierListingId ?? null,
-          supplierImageUsePermitted: joined?.supplierImageUsePermitted ?? false,
-          certificationNumber: rip.gradeLabel,
-        });
-      }
+      const primary = await loadRipWithImage(result.ripId);
+      const bonus = result.bonusRip ? await loadRipWithImage(result.bonusRip.ripId) : null;
 
       const res = NextResponse.json({
         ripId: result.ripId,
-        card: rip
-          ? {
-              name: rip.cardName,
-              setName: rip.setName,
-              cardNumber: rip.cardNumber,
-              finish: rip.finish,
-              condition: rip.condition,
-              gradeLabel: rip.gradeLabel,
-            }
-          : null,
-        resolvedImage,
+        card: primary?.card ?? null,
+        resolvedImage: primary?.resolvedImage ?? null,
+        // Bonus-flip mechanic: a fixed 4% chance, evaluated server-side from the same
+        // committed seed as the primary pull (see deriveBonusFlipHit in
+        // src/server/fairness/engine.ts) — never client-side randomness. `hit` always
+        // reflects the real, already-determined outcome; the client only animates it.
+        bonusFlip: {
+          hit: bonus !== null,
+          card: bonus?.card ?? null,
+          resolvedImage: bonus?.resolvedImage ?? null,
+        },
         fairnessProof: proof
           ? {
               serverSeedCommitment: proof.serverSeedCommitment,

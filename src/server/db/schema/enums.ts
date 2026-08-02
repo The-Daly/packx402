@@ -6,6 +6,12 @@ export const networkModeEnum = pgEnum("network_mode", ["testnet", "mainnet"]);
 
 export const authMethodEnum = pgEnum("auth_method", ["email", "wallet", "passkey", "google"]);
 
+// "primary" is the card the user actually paid for; "bonus_flip" is the extra card awarded
+// on the rare (4%) bonus-flip hit — see src/server/fairness/engine.ts's deriveBonusFlipHit.
+// Both are independently fairness-proven; the bonus flip's own hit/miss determination is
+// itself derived from the committed seed, never client-side randomness.
+export const ripKindEnum = pgEnum("rip_kind", ["primary", "bonus_flip"]);
+
 export const sessionRevokedReasonEnum = pgEnum("session_revoked_reason", [
   "user_revoked",
   "user_revoked_all",

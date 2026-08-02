@@ -99,3 +99,17 @@ Every `FairnessProof` row (keyed by `ripId`) stores the `poolHash`, `oddsHash`,
 `serverSeedCommitment`, `revealedServerSeed`, `clientNonce`, `paymentIdentifier`,
 `chainRandomnessInput`, `combinedSeedHash`, and `selectionRoll` — the full bundle needed
 for reproduction, all copyable as JSON from the `/fairness` verifier UI.
+
+## Bonus-flip addendum
+
+Every completed pack opening also evaluates a fixed 4% chance of awarding a second card
+from the same pool (see `deriveBonusFlipHit`/`selectBonusPoolEntry` in
+`src/server/fairness/engine.ts`). Both the hit/miss determination and the bonus card pick
+are derived from the exact same committed server seed as the primary pull — never
+client-side randomness — via domain-separated string suffixes (`|bonus_flip_trigger` and
+`|bonus_flip_pull`) so the two derivations are cryptographically independent despite
+sharing one underlying seed. This produces a second, independent `FairnessProof` row (with
+its own `ripId`, `combinedSeedHash`, and `selectionRoll`) whenever the bonus flip hits,
+reproducible by anyone the same way as the primary pull. **Not yet reflected** in the
+published probability-band table on the pack-detail page or disclosed pre-purchase — see
+the note in `docs/LEGAL_REVIEW_REQUIRED.md`.

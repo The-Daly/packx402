@@ -1,43 +1,47 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { motion, useReducedMotion } from "motion/react";
 
 export interface CoinFlipProps {
-  /** Fires once the flip animation finishes, with the flip result. Purely cosmetic — the
-   * caller decides what (if anything) happens next; this never determines a card outcome. */
-  onResult: (heads: boolean) => void;
+  /** The already-determined outcome from the server (see deriveBonusFlipHit in
+   * src/server/fairness/engine.ts) — this component only animates it, it never decides
+   * the outcome itself. `true` means the 4% bonus-flip hit and a second real card was
+   * awarded alongside the primary pull. */
+  hit: boolean;
+  /** Fires once the flip animation finishes. */
+  onComplete: () => void;
   className?: string;
 }
 
 /**
- * Purely cosmetic coin-flip flourish shown occasionally after a reveal (see
- * OpenPackClient's low-probability trigger). The flip result never changes which card the
- * user actually won — if it triggers a "bonus" re-reveal, that re-reveal always lands back
- * on the same already-resolved card. Never wired to the fairness engine or real odds.
+ * Animates the bonus-flip result the server already determined (a fixed 4% chance,
+ * derived from the same committed fairness seed as the primary pull — see
+ * offer-service.ts's settleOfferAndOpen). This component has no randomness of its own;
+ * `hit` is real data, not a client-side coin toss.
  */
-export function CoinFlip({ onResult, className }: CoinFlipProps) {
+export function CoinFlip({ hit, onComplete, className }: CoinFlipProps) {
   const reducedMotion = useReducedMotion();
-  const [heads] = useState(() => Math.random() < 0.5);
 
   useEffect(() => {
     if (reducedMotion) {
-      onResult(heads);
+      onComplete();
       return;
     }
-    const timeout = window.setTimeout(() => onResult(heads), 1100);
+    const timeout = window.setTimeout(onComplete, 1100);
     return () => window.clearTimeout(timeout);
-  }, [heads, reducedMotion, onResult]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onComplete is expected to be stable per mount
+  }, [reducedMotion]);
 
   return (
     <div className={["flex flex-col items-center gap-2", className ?? ""].join(" ")} style={{ perspective: 600 }}>
       <motion.div
         className="border-accent bg-surface flex h-16 w-16 items-center justify-center rounded-full border-2 text-xs font-semibold [transform-style:preserve-3d]"
-        animate={reducedMotion ? {} : { rotateY: [0, 1080 + (heads ? 0 : 180)] }}
+        animate={reducedMotion ? {} : { rotateY: [0, 1080 + (hit ? 0 : 180)] }}
         transition={{ duration: 1, ease: "easeOut" }}
         aria-hidden="true"
       >
-        {heads ? "★" : "✦"}
+        {hit ? "★" : "✦"}
       </motion.div>
       <p className="text-muted text-xs" role="status">
         Bonus flip…

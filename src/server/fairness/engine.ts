@@ -134,6 +134,41 @@ export function selectPoolEntry(
   throw new Error("Selection roll exceeded total pool weight — pool data is inconsistent");
 }
 
+// Bonus-flip mechanic (spec addendum): a small, fixed 4% chance, evaluated on every
+// completed pack opening, of awarding a second card from the same pool alongside the one
+// actually paid for. Both the hit/miss determination itself AND the bonus card pick (if
+// any) are derived from the same committed server seed as the primary selection — never
+// client-side randomness — so the whole thing stays independently verifiable exactly like
+// the primary pull. Domain-separated via string suffixes so the two derivations are
+// cryptographically independent of each other despite sharing the same underlying seed.
+export const BONUS_FLIP_CHANCE_PER_MILLION = 40_000n; // 40,000 / 1,000,000 = 4%
+
+/**
+ * Deterministically decides whether this opening's bonus flip hits. Reproducible by
+ * anyone holding the revealed proof bundle, exactly like `selectPoolEntry`.
+ */
+export function deriveBonusFlipHit(input: SelectionInput): boolean {
+  const message = `${buildCombinedSeedMessage(input)}|bonus_flip_trigger`;
+  const hash = sha256Hex(message);
+  const roll = rollFromHash(hash, 1_000_000n);
+  return roll < BONUS_FLIP_CHANCE_PER_MILLION;
+}
+
+/**
+ * Picks the bonus card from the same pool as the primary pull, using a domain-separated
+ * variant of the same committed inputs so it's an independent draw rather than always
+ * matching the primary result.
+ */
+export function selectBonusPoolEntry(
+  entries: WeightedPoolEntry[],
+  input: SelectionInput,
+): SelectionResult {
+  return selectPoolEntry(entries, {
+    ...input,
+    clientNonce: `${input.clientNonce}|bonus_flip_pull`,
+  });
+}
+
 /**
  * Independently verifies a completed selection by recomputing it from the revealed proof
  * bundle and checking every claim. Used by both the internal verifier and the public

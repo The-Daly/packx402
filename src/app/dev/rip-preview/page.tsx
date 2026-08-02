@@ -4,6 +4,7 @@ import { useState } from "react";
 import { PackShelf, type PackShelfItem } from "@/components/pack-art/PackShelf";
 import { OpeningStage, type OpeningPhase } from "@/components/pack-art/OpeningStage";
 import { CoinFlip } from "@/components/pack-art/CoinFlip";
+import { CardOverlaySlot } from "@/components/pack-art/CardOverlaySlot";
 
 const DEMO_TIERS: PackShelfItem[] = [
   { tierKey: "mythic", tierName: "Mythic", price: 250_000_000 },
@@ -36,20 +37,24 @@ export default function RipPreviewPage() {
   const [hasSelectedPack, setHasSelectedPack] = useState(false);
   const [phase, setPhase] = useState<OpeningPhase>("idle");
   const [showCoinFlip, setShowCoinFlip] = useState(false);
+  const [bonusHit, setBonusHit] = useState(false);
+  const [showBonusCard, setShowBonusCard] = useState(false);
   const [wheelKey, setWheelKey] = useState(0);
 
   function reset() {
     setPhase("idle");
     setShowCoinFlip(false);
+    setShowBonusCard(false);
     setWheelKey((k) => k + 1);
   }
 
   function handleRevealSettled() {
     setPhase("resolved");
-    if (Math.random() < 0.35) {
-      // Higher than production's 15% so the flourish is easy to see while demoing.
-      window.setTimeout(() => setShowCoinFlip(true), 500);
-    }
+    // Dev-only: real odds are a fixed 4% derived server-side from the committed fairness
+    // seed (see deriveBonusFlipHit) — this ~40% is just so the flourish is easy to catch
+    // while demoing, not a claim about the real trigger rate.
+    setBonusHit(Math.random() < 0.4);
+    window.setTimeout(() => setShowCoinFlip(true), 500);
   }
 
   return (
@@ -88,15 +93,33 @@ export default function RipPreviewPage() {
 
           {showCoinFlip && (
             <CoinFlip
-              onResult={(heads) => {
+              hit={bonusHit}
+              onComplete={() => {
                 setShowCoinFlip(false);
-                if (heads) {
-                  setWheelKey((k) => k + 1);
-                  setPhase("revealing");
-                }
+                if (bonusHit) setShowBonusCard(true);
               }}
               className="mt-4"
             />
+          )}
+
+          {showBonusCard && (
+            <div className="mt-4">
+              <p className="text-accent mb-2 text-center text-sm font-semibold">
+                Bonus flip hit! You also got:
+              </p>
+              <CardOverlaySlot
+                cardName="Pikachu (demo)"
+                resolved={{
+                  imageUrl: "https://images.pokemontcg.io/base1/58_hires.png",
+                  imageType: "CATALOG_RENDER",
+                  provider: "pokemon_tcg",
+                  attribution: "Card image via the Pokémon TCG API (pokemontcg.io).",
+                  isExactItem: false,
+                  fallbackUsed: false,
+                }}
+                className="mx-auto max-w-[160px]"
+              />
+            </div>
           )}
 
           <button

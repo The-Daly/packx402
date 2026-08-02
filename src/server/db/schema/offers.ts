@@ -8,7 +8,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { chainEnum, packOfferStatusEnum, paymentStatusEnum } from "./enums";
+import { chainEnum, packOfferStatusEnum, paymentStatusEnum, ripKindEnum } from "./enums";
 import { packTiers, poolEntries, poolVersions } from "./packs";
 import { users } from "./users";
 
@@ -84,19 +84,23 @@ export const payments = pgTable(
   ],
 );
 
-// A "Rip" is one completed, paid pack opening — the durable record of what the buyer received.
+// A "Rip" is one completed, paid pack opening — the durable record of what the buyer
+// received. Almost always exactly one "primary" rip per pack offer/payment; on the rare
+// (4%) bonus-flip hit, a second "bonus_flip" rip is created against the SAME offer and
+// payment (nothing was paid twice — see docs/DECISIONS.md and src/server/fairness/engine.ts's
+// deriveBonusFlipHit), which is why packOfferId/paymentId are no longer individually
+// unique — the (packOfferId, kind) pair is what's actually unique.
 export const rips = pgTable(
   "rips",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     packOfferId: uuid("pack_offer_id")
       .notNull()
-      .references(() => packOffers.id)
-      .unique(),
+      .references(() => packOffers.id),
     paymentId: uuid("payment_id")
       .notNull()
-      .references(() => payments.id)
-      .unique(),
+      .references(() => payments.id),
+    kind: ripKindEnum("kind").notNull().default("primary"),
     poolEntryId: uuid("pool_entry_id")
       .notNull()
       .references(() => poolEntries.id),
@@ -111,7 +115,10 @@ export const rips = pgTable(
     isPublic: boolean("is_public").notNull().default(false),
     openedAt: timestamp("opened_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("rips_pool_entry_id_idx").on(t.poolEntryId)],
+  (t) => [
+    uniqueIndex("rips_pack_offer_id_kind_unique").on(t.packOfferId, t.kind),
+    index("rips_pool_entry_id_idx").on(t.poolEntryId),
+  ],
 );
 
 // Everything needed to independently reproduce the deterministic selection (section 43).

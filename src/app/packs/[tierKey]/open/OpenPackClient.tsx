@@ -5,6 +5,7 @@ import Link from "next/link";
 import { PackShelf, type PackShelfItem } from "@/components/pack-art/PackShelf";
 import { OpeningStage, type OpeningPhase } from "@/components/pack-art/OpeningStage";
 import { CoinFlip } from "@/components/pack-art/CoinFlip";
+import { CardOverlaySlot } from "@/components/pack-art/CardOverlaySlot";
 import type { SpinPossibleCard } from "@/components/pack-art/CardRevealWheel";
 import { PaymentMethodPanel } from "@/components/payments/PaymentMethodPanel";
 import type { PackTierKey } from "@/server/config/pack-tiers";
@@ -25,17 +26,20 @@ interface PendingPayment {
   payTo: string;
 }
 
-// Low, purely cosmetic chance of a "bonus flip" flourish after a reveal. Winning it only
-// re-plays the reveal wheel animation, always landing back on the same already-resolved
-// card — see CoinFlip.tsx. Never changes the real fairness-selected outcome or its odds.
-const BONUS_FLIP_CHANCE = 0.15;
+interface BonusFlipResult {
+  hit: boolean;
+  cardName: string | null;
+  resolvedImage: ResolvedCardImage | null;
+}
 
 /**
- * Ties the pack-browsing carousel to the actual opening flow: pick a pack in the
- * carousel, drag-rip it open, then either the real x402 payment requirement (no wallet
- * connect UI exists yet — see PROJECT_STATUS.md — so this is shown rather than faked) or,
- * once a wallet flow supplies a real X-PAYMENT header, the card-reveal wheel spins down to
- * the actual fairness-selected card. Never fabricates a card outcome client-side.
+ * Ties the pack-browsing shelf to the actual opening flow: pick a pack, drag-rip it open,
+ * then either the real x402 payment requirement (no wallet connect UI exists yet — see
+ * PROJECT_STATUS.md — so this is shown rather than faked) or, once a wallet flow supplies
+ * a real X-PAYMENT header, settlement succeeds and the reveal wheel spins down to the
+ * actual fairness-selected card plus the server's already-determined bonus-flip outcome
+ * (a fixed 4% chance — see deriveBonusFlipHit in src/server/fairness/engine.ts). Never
+ * fabricates a card outcome or a bonus-flip result client-side.
  */
 export function OpenPackClient({
   tiers,
@@ -51,14 +55,13 @@ export function OpenPackClient({
   const [phase, setPhase] = useState<OpeningPhase>("idle");
   const [pendingPayment, setPendingPayment] = useState<PendingPayment | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showCoinFlip, setShowCoinFlip] = useState(false);
   const [wheelKey, setWheelKey] = useState(0);
   const [possibleCards, setPossibleCards] = useState<SpinPossibleCard[]>([]);
-
-  // Populated once a real wallet-connect flow supplies X-PAYMENT and settlement succeeds —
-  // not reachable yet in this beta (no wallet-connect UI), so these stay null for now.
-  const resolvedImage: ResolvedCardImage | null = null;
-  const cardName: string | null = null;
+  const [cardName, setCardName] = useState<string | null>(null);
+  const [resolvedImage, setResolvedImage] = useState<ResolvedCardImage | null>(null);
+  const [bonusFlip, setBonusFlip] = useState<BonusFlipResult | null>(null);
+  const [showCoinFlip, setShowCoinFlip] = useState(false);
+  const [showBonusCard, setShowBonusCard] = useState(false);
 
   async function handleRipped() {
     setPhase("tearing");
@@ -85,6 +88,19 @@ export function OpenPackClient({
         setPhase("idle"); // no wallet-connect UI yet — surface the payment panel instead of faking a reveal
         return;
       }
+      if (res.ok && data.card) {
+        // Reachable once a real wallet flow supplies X-PAYMENT — not exercised in this
+        // beta yet, but the response contract (including bonusFlip) is already real.
+        setCardName(data.card.name);
+        setResolvedImage(data.resolvedImage ?? null);
+        setBonusFlip({
+          hit: Boolean(data.bonusFlip?.hit),
+          cardName: data.bonusFlip?.card?.name ?? null,
+          resolvedImage: data.bonusFlip?.resolvedImage ?? null,
+        });
+        setPhase("revealing");
+        return;
+      }
       setError(data.message ?? "Could not start this pack opening.");
       setPhase("idle");
     } catch {
@@ -95,26 +111,28 @@ export function OpenPackClient({
 
   function handleRevealSettled() {
     setPhase("resolved");
-    if (Math.random() < BONUS_FLIP_CHANCE) {
+    if (bonusFlip) {
       window.setTimeout(() => setShowCoinFlip(true), 500);
     }
   }
 
-  function handleCoinFlipResult(heads: boolean) {
+  function handleCoinFlipComplete() {
     setShowCoinFlip(false);
-    if (heads) {
-      // Cosmetic re-reveal flourish only — always lands back on the same real card.
-      setWheelKey((k) => k + 1);
-      setPhase("revealing");
+    if (bonusFlip?.hit) {
+      setShowBonusCard(true);
     }
   }
 
   function resetOpeningState() {
     setPendingPayment(null);
     setError(null);
-    setShowCoinFlip(false);
     setPhase("idle");
     setWheelKey((k) => k + 1);
+    setCardName(null);
+    setResolvedImage(null);
+    setBonusFlip(null);
+    setShowCoinFlip(false);
+    setShowBonusCard(false);
   }
 
   async function loadPossibleCards(tierKey: string) {
@@ -153,7 +171,22 @@ export function OpenPackClient({
               onSpinComplete={handleRevealSettled}
             />
 
-            {showCoinFlip && <CoinFlip onResult={handleCoinFlipResult} className="mt-4" />}
+            {showCoinFlip && bonusFlip && (
+              <CoinFlip hit={bonusFlip.hit} onComplete={handleCoinFlipComplete} className="mt-4" />
+            )}
+
+            {showBonusCard && bonusFlip?.hit && (
+              <div className="mt-4">
+                <p className="text-accent mb-2 text-center text-sm font-semibold">
+                  Bonus flip hit! You also got:
+                </p>
+                <CardOverlaySlot
+                  cardName={bonusFlip.cardName ?? "Bonus card"}
+                  resolved={bonusFlip.resolvedImage}
+                  className="mx-auto max-w-[160px]"
+                />
+              </div>
+            )}
 
             {error && (
               <div className="mt-4 text-center">

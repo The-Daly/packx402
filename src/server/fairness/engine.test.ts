@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   commitServerSeed,
+  deriveBonusFlipHit,
+  selectBonusPoolEntry,
   selectPoolEntry,
   sha256Hex,
   verifySelection,
@@ -216,5 +218,65 @@ describe("fairness engine", () => {
     expect(counts["entry-a"] / trials).toBeLessThan(0.8);
     expect(counts["entry-c"] / trials).toBeGreaterThan(0.02);
     expect(counts["entry-c"] / trials).toBeLessThan(0.08);
+  });
+
+  describe("bonus-flip mechanic", () => {
+    it("deriveBonusFlipHit is deterministic for identical inputs", () => {
+      const input = {
+        revealedServerSeed: VECTOR_1.serverSeed,
+        clientNonce: VECTOR_1.clientNonce,
+        paymentIdentifier: VECTOR_1.paymentIdentifier,
+        chainRandomnessInput: VECTOR_1.chainRandomnessInput,
+        poolHash: VECTOR_1.poolHash,
+      };
+      expect(deriveBonusFlipHit(input)).toBe(deriveBonusFlipHit(input));
+    });
+
+    it("hits roughly 4% of the time over many trials", () => {
+      let hits = 0;
+      const trials = 5000;
+      for (let i = 0; i < trials; i++) {
+        const hit = deriveBonusFlipHit({
+          revealedServerSeed: sha256Hex(`bonus-seed-${i}`),
+          clientNonce: `bonus-nonce-${i}`,
+          paymentIdentifier: `bonus-payment-${i}`,
+          chainRandomnessInput: `bonus-rand-${i}`,
+          poolHash: VECTOR_1.poolHash,
+        });
+        if (hit) hits += 1;
+      }
+      const rate = hits / trials;
+      expect(rate).toBeGreaterThan(0.02);
+      expect(rate).toBeLessThan(0.06);
+    });
+
+    it("selectBonusPoolEntry picks a valid entry and is independent of the primary pull", () => {
+      const input = {
+        revealedServerSeed: VECTOR_1.serverSeed,
+        clientNonce: VECTOR_1.clientNonce,
+        paymentIdentifier: VECTOR_1.paymentIdentifier,
+        chainRandomnessInput: VECTOR_1.chainRandomnessInput,
+        poolHash: VECTOR_1.poolHash,
+      };
+      const primary = selectPoolEntry(VECTOR_1.entries, input);
+      const bonus = selectBonusPoolEntry(VECTOR_1.entries, input);
+
+      expect(VECTOR_1.entries.some((e) => e.id === bonus.selectedEntryId)).toBe(true);
+      // Domain-separated derivation — different combined seed hash from the primary pull.
+      expect(bonus.combinedSeedHash).not.toBe(primary.combinedSeedHash);
+    });
+
+    it("selectBonusPoolEntry is deterministic for identical inputs", () => {
+      const input = {
+        revealedServerSeed: VECTOR_1.serverSeed,
+        clientNonce: VECTOR_1.clientNonce,
+        paymentIdentifier: VECTOR_1.paymentIdentifier,
+        chainRandomnessInput: VECTOR_1.chainRandomnessInput,
+        poolHash: VECTOR_1.poolHash,
+      };
+      const a = selectBonusPoolEntry(VECTOR_1.entries, input);
+      const b = selectBonusPoolEntry(VECTOR_1.entries, input);
+      expect(a).toEqual(b);
+    });
   });
 });
