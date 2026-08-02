@@ -59,3 +59,177 @@ body {
 .skip-link:focus {
   left: 0;
 }
+
+/* ---------------------------------------------------------------------- */
+/* PackArt fallback face — see src/components/pack-art/PackArt.tsx        */
+/* ---------------------------------------------------------------------- */
+
+.pack-art-fallback {
+  border: 1px solid rgb(255 255 255 / 0.08);
+}
+
+.pack-art-sheen {
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    color-mix(in srgb, var(--sheen-color) 35%, transparent) 48%,
+    transparent 62%
+  );
+  background-size: 250% 250%;
+  background-position: 0% 0%;
+  animation: pack-art-sheen-sweep 6s ease-in-out infinite;
+  mix-blend-mode: screen;
+}
+
+@keyframes pack-art-sheen-sweep {
+  0% {
+    background-position: 120% 0%;
+  }
+  50% {
+    background-position: -20% 100%;
+  }
+  100% {
+    background-position: 120% 0%;
+  }
+}
+
+.pack-art-crest {
+  filter: drop-shadow(0 0 6px color-mix(in srgb, currentColor 40%, transparent));
+}
+
+.pack-art-opening {
+  animation: pack-art-opening-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pack-art-opening-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: scale(1.015);
+    filter: brightness(1.08);
+  }
+}
+
+.pack-art-skeleton {
+  background: linear-gradient(
+    100deg,
+    var(--surface) 30%,
+    var(--surface-raised) 50%,
+    var(--surface) 70%
+  );
+  background-size: 300% 100%;
+  animation: pack-art-skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes pack-art-skeleton-shimmer {
+  0% {
+    background-position: 150% 0%;
+  }
+  100% {
+    background-position: -50% 0%;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* ResultEffect placeholders — src/components/pack-art/ResultEffect.tsx   */
+/* Placeholder CSS only; replaced by real VFX clips per docs/ASSET_MANIFEST.md */
+/* ---------------------------------------------------------------------- */
+
+.result-effect-ring {
+  width: 40%;
+  height: 40%;
+  border: 1px solid;
+  opacity: 0;
+  animation: result-effect-ring-expand 1.8s ease-out infinite;
+}
+
+@keyframes result-effect-ring-expand {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.65;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+.result-effect-eclipse {
+  width: 30%;
+  height: 30%;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--accent) 55%, transparent) 0%,
+    transparent 70%
+  );
+  animation: result-effect-eclipse-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes result-effect-eclipse-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.15);
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* PackCarousel ambient background — src/components/pack-art/PackCarousel.tsx */
+/* ---------------------------------------------------------------------- */
+
+.carousel-ambient {
+  background:
+    radial-gradient(
+      circle at 30% 40%,
+      color-mix(in srgb, var(--accent) 18%, transparent) 0%,
+      transparent 55%
+    ),
+    radial-gradient(circle at 70% 60%, rgba(63, 168, 140, 0.14) 0%, transparent 55%);
+  background-size:
+    140% 140%,
+    140% 140%;
+  animation: carousel-ambient-drift 18s ease-in-out infinite alternate;
+}
+
+@keyframes carousel-ambient-drift {
+  0% {
+    background-position:
+      20% 30%,
+      80% 70%;
+  }
+  100% {
+    background-position:
+      35% 55%,
+      65% 45%;
+  }
+}
+
+.result-effect-column {
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    color-mix(in srgb, var(--accent) 60%, transparent) 45%,
+    transparent 100%
+  );
+  animation: result-effect-column-rise 2.6s ease-in-out infinite;
+}
+
+@keyframes result-effect-column-rise {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}

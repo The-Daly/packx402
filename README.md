@@ -72,7 +72,9 @@ No custodial wallets, no seed/private-key storage, no cash withdrawals, no inter
 withdrawable currency, no P2P card marketplace, no user-to-user crypto transfers, no
 spending/loss leaderboards, no "almost won" or loss-recovery messaging, no autoplay or
 one-click repeat purchases, no direct messaging in this beta. High-value packs
-(> $100) are disabled server-side pending legal/financial/security review.
+(> $250, Crown and up) are disabled server-side — the beta bankroll doesn't yet cover
+funding supplier purchases above that price point, pending legal/financial/security
+review before it's lifted.
 
 ## License
 

@@ -4,6 +4,8 @@ import { packTiers } from "@/server/db/schema";
 import { asc } from "drizzle-orm";
 import { usdcBaseUnitsToDisplayString } from "@/shared/money";
 import { serverEnv } from "@/server/env";
+import { PackArt } from "@/components/pack-art/PackArt";
+import type { PackTierKey } from "@/server/config/pack-tiers";
 
 export const revalidate = 60;
 
@@ -59,7 +61,14 @@ export default async function MarketplacePage() {
                       </span>
                     )}
                   </div>
-                  <div className="from-surface-raised to-background mb-4 aspect-[3/4] rounded-md bg-gradient-to-br" />
+                  <PackArt
+                    tierKey={tier.key as PackTierKey}
+                    tierName={tier.name}
+                    price={tier.priceUsdcBaseUnits}
+                    locked={isLocked}
+                    size="card"
+                    className="mb-4"
+                  />
                   <p className="group-hover:text-accent font-semibold">{tier.name}</p>
                   <p className="text-muted mt-1 text-sm">
                     ${usdcBaseUnitsToDisplayString(tier.priceUsdcBaseUnits)} · shipping{" "}

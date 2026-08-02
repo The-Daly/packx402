@@ -1,49 +1,82 @@
-# Higgsfield Pack Artwork Prompts
+# PACK402 Higgsfield Pack Artwork
 
-**No images have been generated in this session.** This document specifies the prompts to
-use with an image-generation tool; `public/packs/placeholders/` (see below) holds
-correctly-named/dimensioned development placeholders only.
+**Status: real assets generated and installed.** Ten of the fourteen tiers (Spark through
+Mythic — every tier priced at or under $250, i.e. everything not currently locked per
+`docs/LEGAL_REVIEW_REQUIRED.md`'s bankroll gate) have real Higgsfield-generated artwork at
+`public/packs/{tierKey}.png`. Crown, Vault, Grail, and Genesis remain CSS/SVG placeholders
+(`PackArt`'s fallback face) — they're locked in the UI, so there's no user-facing gap.
+Model used: `nano_banana_pro` (Google), 2K resolution, `2:3` aspect ratio.
 
-## Base prompt (all tiers)
+Note: the generated brand mark reads **"PACK402"**, not "PackX402" — the images were
+produced before the mid-build rename was reconciled with the art direction. If the
+product settles on "PackX402" as the permanent name, these need a regeneration pass (or a
+composited wordmark swap) before shipping publicly.
 
-> Premium vertical collectible-card mystery pack, entirely original branding, PACKX402
-> geometric wordmark, sealed metallic foil wrapper, centered tier emblem, dark
-> collector-vault aesthetic, sophisticated holographic highlights, studio product
-> photography, isolated front-facing product, consistent proportions, no hands, no
-> existing trading-card characters, no Pokémon, no Yu-Gi-Oh, no existing logos, no
-> copyrighted creatures.
+## Reference chain
 
-## Tier treatments (append to the base prompt)
+All ten tiers were derived from one another via image-to-image generation, preserving
+structure exactly and only varying material/color, per the "same pack, different tiers"
+requirement:
 
-| Tier     | Treatment                      |
-| -------- | ------------------------------ |
-| Spark    | electric cyan                  |
-| Starter  | brushed copper                 |
-| Scout    | forest teal                    |
-| Bronze   | aged bronze                    |
-| Silver   | satin silver                   |
-| Gold     | restrained gold                |
-| Prism    | spectral foil                  |
-| Platinum | ice-white platinum             |
-| Obsidian | volcanic black                 |
-| Mythic   | cosmic violet                  |
-| Crown    | royal black and gold           |
-| Vault    | emerald security engraving     |
-| Grail    | ivory and antique gold         |
-| Genesis  | black diamond and aurora edges |
+1. **Crest/logo lockup** — text-to-image, `nano_banana_pro`, standalone brand asset (not
+   installed as pack art; a candidate for `public/brand/`, not yet added).
+2. **Obsidian master (champagne gold + emerald, no X)** — the first structural reference,
+   text-to-image.
+3. **Platinum X-crest** — image-to-image from (2): added the X-motif crest (vault-arc
+   lines crossing behind the P, reads as "PX"), shifted to platinum/white-gold. This
+   became the canonical structural reference for all subsequent tiers.
+4. **Silver** — image-to-image from (3): pure silver/white-metal throughout, including
+   the inner label-zone border (explicitly no gold anywhere, per direction).
+5. **Rose-gold X-crest** — image-to-image from (3): warm copper/rose-gold tone (exploration,
+   not currently mapped to a shipped tier).
+6. **Spark, Starter, Scout, Bronze, Gold, Prism, Obsidian, Mythic** — each image-to-image
+   from (3), varying only the metallic tone/accent per the tier color table below.
 
-## Output spec
+## Tier → material mapping (as generated)
 
-- Vertical, 3:4 aspect ratio (matches the placeholder `aspect-[3/4]` used throughout the
-  UI in `src/app/packs/page.tsx` and `src/app/packs/[tierKey]/page.tsx`).
-- Filename convention: `public/packs/{tierKey}.png` (e.g. `public/packs/spark.png`).
-- Transparent or dark-vault background consistent with the site's dark theme
-  (`src/app/globals.css` `--background: #0b0d10`).
+| Tier | File | Material |
+|---|---|---|
+| Spark | `spark.png` | Satin black + electric cyan edging/engraving |
+| Starter | `starter.png` | Brushed copper, warm amber |
+| Scout | `scout.png` | Deep forest teal + silver geometry |
+| Bronze | `bronze.png` | Aged bronze, matte black panel |
+| Silver | `silver.png` | Pure satin silver/white metal (no gold anywhere) |
+| Gold | `gold.png` | Restrained champagne gold, black enamel |
+| Prism | `prism.png` | Satin black + controlled holographic/spectral foil |
+| Platinum | `platinum.png` | Ice-white platinum/white-gold |
+| Obsidian | `obsidian.png` | Volcanic black glass + champagne gold + emerald rim |
+| Mythic | `mythic.png` | Cosmic violet-black + antique gold + subtle starfield |
+| Crown | *(placeholder)* | Not generated — locked tier |
+| Vault | *(placeholder)* | Not generated — locked tier |
+| Grail | *(placeholder)* | Not generated — locked tier |
+| Genesis | *(placeholder)* | Not generated — locked tier |
 
-## Development placeholders
+## Design elements common to every generated tier
 
-No placeholder image files were generated in this session (no image-generation tool was
-invoked). The UI currently renders a CSS gradient (`bg-gradient-to-br from-surface-raised
-to-background`) in place of pack artwork wherever an image would go — see the `aspect-[3/4]`
-divs in the marketplace/detail/landing pages. Replace those divs with an `<Image
-src="/packs/{tierKey}.png" ... />` once real artwork exists.
+- Vault-arc geometric crest with a stylized "P", crossed by an "X" motif (reads as "PX",
+  tying to the PackX402 name) — four thin corner verification marks at the crest's bounds.
+- Inner rectangular label zone (blank — reserved for tier name/price, composited by the
+  UI as real text, not baked into the image) with a small crown emblem above it.
+- Dark glass pack body, realistic top/bottom foil seams, polished black-marble pedestal,
+  warm bokeh studio lighting, centered front-facing 2:3 vertical composition.
+- No existing card-game characters, no Pokémon, no Yu-Gi-Oh, no copyrighted creatures, no
+  people/hands — verified visually against every generated image.
+
+## Known follow-ups
+
+- **File size**: raw PNGs are ~5MB each (~51MB total for the 10 tiers) — Next.js's image
+  optimizer resizes/re-encodes on request, so served bytes are much smaller, but the
+  committed repo size is worth reducing (re-export as compressed PNG/WebP) before this
+  matters for clone times.
+- **Brand name mismatch**: see the note at the top of this file.
+- **Crown/Vault/Grail/Genesis**: not generated — regenerate once those tiers unlock.
+- **Card back, marketing variants (pedestal/3q/closeup/thumb/hero shots), video/VFX
+  assets**: none generated yet — see `docs/ASSET_MANIFEST.md` for the full remaining list.
+
+## Base prompt used (all tiers, after the X-crest reference was established)
+
+> Using the exact same pack structure, proportions, seams, pedestal, camera angle,
+> lighting setup, and X-crest design (vault-arc lines crossing behind the P, four corner
+> marks, inner rectangular label zone with small crown emblem) as the reference image,
+> create the {TIER} tier variant: {material description}. Keep the blank rectangular text
+> zone empty, no readable text.

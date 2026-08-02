@@ -7,11 +7,50 @@ import { eq } from "drizzle-orm";
 
 /**
  * Seeds the fixed pack tier catalog, one CardTrader mock-mode supplier, its fixture
- * listings, and a published pool version + entries for the Spark and Gold tiers so the
- * marketplace and opening flow are demoable end to end in mock/testnet mode.
+ * listings, and a published pool version + entries for every one of the 14 pack tiers
+ * (commons + a chase card drawn from the fixture ladder, scaled to each tier's
+ * procurement cap) so the marketplace, pack-detail odds table, and opening flow are
+ * demoable end to end in mock/testnet mode for every tier, not just a couple.
  *
  * Run with: npm run db:seed (requires `docker compose up -d && npm run db:migrate` first).
  */
+
+// Commons carry the bulk of the weight; the single most expensive eligible fixture
+// becomes the tier's "chase" card at a small weight — a simple, transparent stand-in for
+// real supplier-driven odds curation, not a claim about real-world pull rates.
+const COMMON_WEIGHTS = [550, 300, 100]; // sums to 950 when 3 commons are available
+const CHASE_WEIGHT = 50;
+
+function buildPoolEntriesForTier(procurementCapUsdcBaseUnits: number) {
+  const eligible = MOCK_CARDTRADER_INVENTORY.filter(
+    (f) => f.priceUsdcBaseUnits <= procurementCapUsdcBaseUnits,
+  ).sort((a, b) => a.priceUsdcBaseUnits - b.priceUsdcBaseUnits);
+
+  if (eligible.length === 0) return [];
+
+  const chase = eligible[eligible.length - 1];
+  const commonsPool = eligible.slice(0, -1);
+  const commons = commonsPool.slice(0, Math.min(3, commonsPool.length));
+
+  const totalCommonWeight = COMMON_WEIGHTS.slice(0, commons.length).reduce((a, b) => a + b, 0);
+  const entries = commons.map((fixture, i) => ({
+    fixture,
+    weight: COMMON_WEIGHTS[i],
+    probabilityBandLabel: `~${Math.round((COMMON_WEIGHTS[i] / (totalCommonWeight + (commons.length > 0 ? CHASE_WEIGHT : 0))) * 100)}%`,
+  }));
+
+  if (chase && chase.externalListingId !== commons[commons.length - 1]?.externalListingId) {
+    const denom = totalCommonWeight + CHASE_WEIGHT;
+    entries.push({
+      fixture: chase,
+      weight: CHASE_WEIGHT,
+      probabilityBandLabel: `~${Math.round((CHASE_WEIGHT / denom) * 100)}% (chase)`,
+    });
+  }
+
+  return entries;
+}
+
 async function main() {
   console.log("Seeding pack tiers...");
   for (const tier of PACK_TIERS) {
@@ -92,25 +131,25 @@ async function main() {
     listingIds[fixture.externalListingId] = row.id;
   }
 
-  console.log("Publishing pool versions for Spark and Gold...");
-  for (const tierKey of ["spark", "gold"] as const) {
-    const [tierRow] = await db.select().from(packTiers).where(eq(packTiers.key, tierKey)).limit(1);
+  console.log("Publishing pool versions for all 14 tiers...");
+  for (const tierDef of PACK_TIERS) {
+    const [tierRow] = await db
+      .select()
+      .from(packTiers)
+      .where(eq(packTiers.key, tierDef.key))
+      .limit(1);
     if (!tierRow) continue;
 
-    const entriesSpec =
-      tierKey === "spark"
-        ? [
-            { fixtureId: "mock-listing-001", weight: 800, probabilityBandLabel: "~80%" },
-            { fixtureId: "mock-listing-002", weight: 200, probabilityBandLabel: "~20%" },
-          ]
-        : [
-            { fixtureId: "mock-listing-002", weight: 600, probabilityBandLabel: "~60%" },
-            { fixtureId: "mock-listing-004", weight: 350, probabilityBandLabel: "~35%" },
-            { fixtureId: "mock-listing-003", weight: 50, probabilityBandLabel: "~5% (chase)" },
-          ];
+    const entriesSpec = buildPoolEntriesForTier(tierRow.procurementPriceCapUsdcBaseUnits);
+    if (entriesSpec.length === 0) {
+      console.log(`  ${tierDef.key}: no eligible fixtures under its procurement cap, skipping`);
+      continue;
+    }
 
-    const poolHash = sha256Hex(`${tierKey}:${entriesSpec.map((e) => e.fixtureId).join(",")}`);
-    const oddsHash = sha256Hex(`${tierKey}:odds:${entriesSpec.map((e) => e.weight).join(",")}`);
+    const poolHash = sha256Hex(
+      `${tierDef.key}:${entriesSpec.map((e) => e.fixture.externalListingId).join(",")}`,
+    );
+    const oddsHash = sha256Hex(`${tierDef.key}:odds:${entriesSpec.map((e) => e.weight).join(",")}`);
     const totalWeight = entriesSpec.reduce((acc, e) => acc + e.weight, 0);
 
     const [pool] = await db
@@ -121,7 +160,7 @@ async function main() {
         isPromotional: false,
         poolHash,
         oddsHash,
-        supplierSnapshotHash: sha256Hex(`snapshot:${tierKey}`),
+        supplierSnapshotHash: sha256Hex(`snapshot:${tierDef.key}`),
         totalWeight,
         cardCountTotal: entriesSpec.length,
       })
@@ -131,24 +170,22 @@ async function main() {
     if (!pool) continue; // already seeded
 
     for (const spec of entriesSpec) {
-      const fixture = MOCK_CARDTRADER_INVENTORY.find(
-        (f) => f.externalListingId === spec.fixtureId,
-      )!;
       await db.insert(poolEntries).values({
         poolVersionId: pool.id,
-        cardGame: fixture.cardGame,
-        cardName: fixture.cardName,
-        setName: fixture.setName,
-        cardNumber: fixture.cardNumber,
-        finish: fixture.finish,
-        minCondition: fixture.condition,
+        cardGame: spec.fixture.cardGame,
+        cardName: spec.fixture.cardName,
+        setName: spec.fixture.setName,
+        cardNumber: spec.fixture.cardNumber,
+        finish: spec.fixture.finish,
+        minCondition: spec.fixture.condition,
         weight: spec.weight,
         probabilityBandLabel: spec.probabilityBandLabel,
-        referenceValueUsdcBaseUnits: fixture.priceUsdcBaseUnits,
+        referenceValueUsdcBaseUnits: spec.fixture.priceUsdcBaseUnits,
         referenceValueAsOf: new Date(),
-        supplierListingId: listingIds[spec.fixtureId],
+        supplierListingId: listingIds[spec.fixture.externalListingId],
       });
     }
+    console.log(`  ${tierDef.key}: ${entriesSpec.length} pool entries`);
   }
 
   console.log("Seed complete.");

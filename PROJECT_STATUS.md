@@ -1,6 +1,6 @@
 # PackX402 — Project Status
 
-Last updated: 2026-08-01 (initial beta scaffold build).
+Last updated: 2026-08-01 (beta scaffold + PackArt visual system + auth API routes).
 
 This document is the single source of truth for what is actually implemented, what is
 scaffolded but unverified, and what has not been started. Do not trust marketing language

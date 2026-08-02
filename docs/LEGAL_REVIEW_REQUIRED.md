@@ -5,7 +5,11 @@ production launch or before enabling a currently-gated feature. Nothing in this 
 been reviewed by counsel as part of this build session — this is an engineering-generated
 checklist, not a legal opinion.
 
-## Before enabling high-value packs (Mythic and above, > $100)
+## Before enabling high-value packs (Crown and above, > $250)
+
+Locked during beta primarily because the current supplier-purchase bankroll doesn't cover
+funding fulfillment above this price point — the items below are what's additionally
+required before lifting the lock once that changes.
 
 - Consumer-protection review of randomized physical-goods sales in every jurisdiction
   PackX402 operates in (loot-box-style regulation varies significantly by country and, in

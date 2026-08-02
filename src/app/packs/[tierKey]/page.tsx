@@ -5,6 +5,8 @@ import { packTiers, poolEntries, poolVersions } from "@/server/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { usdcBaseUnitsToDisplayString } from "@/shared/money";
 import { serverEnv } from "@/server/env";
+import { PackArt } from "@/components/pack-art/PackArt";
+import type { PackTierKey } from "@/server/config/pack-tiers";
 
 export const revalidate = 30;
 
@@ -45,7 +47,15 @@ export default async function PackDetailPage({ params }: { params: Promise<{ tie
     <div className="mx-auto max-w-5xl px-6 py-12">
       <div className="grid gap-10 md:grid-cols-2">
         <div>
-          <div className="from-surface-raised via-surface to-background aspect-[3/4] rounded-lg bg-gradient-to-br" />
+          <PackArt
+            tierKey={tier.key as PackTierKey}
+            tierName={tier.name}
+            price={tier.priceUsdcBaseUnits}
+            locked={isLocked}
+            size="detail"
+            priority
+            featured
+          />
         </div>
         <div>
           <h1 className="text-3xl font-semibold">{tier.name} Pack</h1>

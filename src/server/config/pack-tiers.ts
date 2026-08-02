@@ -47,26 +47,29 @@ export interface PackTierDefinition {
 const USDC_BASE_UNITS_PER_DOLLAR = 1_000_000; // USDC has 6 decimals
 const usd = (dollars: number) => Math.round(dollars * USDC_BASE_UNITS_PER_DOLLAR);
 
-// Beta default availability per spec section 3:
-// - TestNet: Spark through Gold
-// - Algorand MainNet: Spark through Bronze
-// - Solana / EVM: test networks only, up to Gold (mirrors TestNet ceiling)
-// - Packs above $25 (Prism+): visible but locked
-// - Packs above $100 (Mythic+): require a future legal/inventory/financial/security/
-//   responsible-purchasing release gate, disabled server-side (requiresHighValueReleaseGate)
-const TESTNET_CEILING: PackTierKey[] = ["spark", "starter", "scout", "bronze", "silver", "gold"];
-const MAINNET_CEILING: PackTierKey[] = ["spark", "starter", "scout", "bronze"];
-const LOCKED_ABOVE: PackTierKey[] = [
+// Beta default availability:
+// - TestNet / Solana / EVM: Spark through Mythic ($250) — everything the current
+//   supplier-purchase bankroll can actually fund.
+// - Algorand MainNet: Spark through Bronze (unrelated, more conservative real-money limit).
+// - Packs above $250 (Crown+): visible but locked — the beta bankroll does not yet cover
+//   funding supplier purchases above this price point. Unlock once that changes.
+// - The same $250 threshold also gates `requiresHighValueReleaseGate`, since a legal/
+//   financial/security review is required before either lock lifts.
+const TESTNET_CEILING: PackTierKey[] = [
+  "spark",
+  "starter",
+  "scout",
+  "bronze",
+  "silver",
+  "gold",
   "prism",
   "platinum",
   "obsidian",
   "mythic",
-  "crown",
-  "vault",
-  "grail",
-  "genesis",
 ];
-const HIGH_VALUE_GATE_ABOVE: PackTierKey[] = ["mythic", "crown", "vault", "grail", "genesis"];
+const MAINNET_CEILING: PackTierKey[] = ["spark", "starter", "scout", "bronze"];
+const LOCKED_ABOVE: PackTierKey[] = ["crown", "vault", "grail", "genesis"];
+const HIGH_VALUE_GATE_ABOVE: PackTierKey[] = ["crown", "vault", "grail", "genesis"];
 
 function buildTier(
   key: PackTierKey,

@@ -36,8 +36,8 @@ export const packTiers = pgTable("pack_tiers", {
   availableEvm: boolean("available_evm").notNull().default(false), // testnet only per policy
   requiresHighValueReleaseGate: boolean("requires_high_value_release_gate")
     .notNull()
-    .default(false), // > $100
-  locked: boolean("locked").notNull().default(false), // visible-but-locked (> $25 during beta by default)
+    .default(false), // > $250 (Crown+) — current beta bankroll can't fund fulfillment above this
+  locked: boolean("locked").notNull().default(false), // visible-but-locked (> $250 during beta by default)
   weeklyFreePackEligible: boolean("weekly_free_pack_eligible").notNull().default(false),
   imageUrl: text("image_url"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

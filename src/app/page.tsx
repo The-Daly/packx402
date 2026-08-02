@@ -2,7 +2,8 @@ import Link from "next/link";
 import { db } from "@/server/db/client";
 import { packTiers } from "@/server/db/schema";
 import { asc, eq } from "drizzle-orm";
-import { usdcBaseUnitsToDisplayString } from "@/shared/money";
+import { FeaturedPacksCarousel } from "./FeaturedPacksCarousel";
+import type { PackTierKey } from "@/server/config/pack-tiers";
 
 export const revalidate = 60;
 
@@ -70,21 +71,14 @@ export default async function HomePage() {
             <code className="text-accent">npm run db:seed</code> to populate tiers.
           </p>
         ) : (
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            {featured.map((tier) => (
-              <Link
-                key={tier.id}
-                href={`/packs/${tier.key}`}
-                className="group border-border-subtle bg-surface hover:border-accent/50 rounded-lg border p-5 transition"
-              >
-                <div className="from-surface-raised to-background mb-4 aspect-[3/4] rounded-md bg-gradient-to-br" />
-                <p className="group-hover:text-accent font-semibold">{tier.name}</p>
-                <p className="text-muted text-sm">
-                  ${usdcBaseUnitsToDisplayString(tier.priceUsdcBaseUnits)}
-                </p>
-              </Link>
-            ))}
-          </div>
+          <FeaturedPacksCarousel
+            items={featured.map((tier) => ({
+              tierKey: tier.key as PackTierKey,
+              tierName: tier.name,
+              price: tier.priceUsdcBaseUnits,
+              locked: tier.locked,
+            }))}
+          />
         )}
       </section>
 
