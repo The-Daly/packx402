@@ -235,6 +235,14 @@ run db:migrate && npm run db:seed` to verify.
   (now CSRF-protected, matching its sibling mutating routes). `OpenPackClient` links here
   automatically when pack-offer creation fails with `eligibility_required`. This is a UX
   convenience only — `createPackOffer()` remains the real, unbypassable server-side gate.
+- **Shipping-address management** (`/shipping-addresses` + `GET/POST /api/shipping-
+  addresses`, `DELETE /api/shipping-addresses/:id`, `POST /api/shipping-addresses/:id/
+  default`): add/list/remove/set-default, every free-text field encrypted at rest
+  (existing `encryptField`/`decryptField`, same as elsewhere in the schema), first address
+  added is auto-default, deleting the default promotes the next-oldest one so there's
+  always a clear default whenever at least one address exists. This is what the
+  supplier-purchase worker needs on file before it can complete a real purchase — linked
+  to from `/collection`. CSRF-protected like every other mutating route.
 - **UI pages NOT built**: a dedicated wallet-center/account page (connect/disconnect is
   available inline wherever `ConnectPeraButton` is used, but there's no standalone wallet
   management page), Defly/Phantom for Solana+EVM (Pera/Algorand only for now), shipping
@@ -293,9 +301,9 @@ run db:migrate && npm run db:seed` to verify.
    nothing in this environment could exercise that live. Defly and Phantom (Solana/EVM)
    still need their own connect flows built the same way.
 5. ~~Build the supplier-purchase worker process~~ — done, see
-   `src/server/suppliers/purchase-worker.ts` above. Still needs: a shipping-address UI
-   (the worker fails clearly rather than guessing when none exists), and a cross-process
-   lock if ever running more than one worker instance against the same supplier account.
+   `src/server/suppliers/purchase-worker.ts` above. Still needs: a cross-process lock if
+   ever running more than one worker instance against the same supplier account, and the
+   spec-section-40 substitution search (no configured price tolerance exists yet).
 6. ~~Wire real rolling-spend aggregation into `offer-service.ts`'s limit check~~ — done,
    see `getRollingSpend()` above.
 7. Wire a live CardTrader photo/catalog credential (or PSA/public-catalog credential) into
@@ -304,8 +312,7 @@ run db:migrate && npm run db:seed` to verify.
 8. Obtain CardTrader and GoPlausible sandbox credentials and run an actual integration
    test pass before ever setting `CARDTRADER_MODE=live` or
    `X402_FACILITATOR_MODE=live` outside of TestNet dry runs.
-9. Build a shipping-address UI (add/edit/select default) — the supplier-purchase worker
-   needs one on file per user before it can actually complete a purchase.
+9. ~~Build a shipping-address UI~~ — done, see `/shipping-addresses` above.
 
 ## Beta restrictions verified present in code
 

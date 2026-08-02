@@ -59,7 +59,11 @@ export default async function CollectionPage() {
       <h1 className="mb-2 text-2xl font-semibold">My Openings</h1>
       <p className="text-muted mb-8 text-sm">
         Every card you&apos;ve pulled, visible only to you. Each opening links to its
-        independently verifiable fairness proof.
+        independently verifiable fairness proof. Manage where cards ship in{" "}
+        <Link href="/shipping-addresses" className="text-accent hover:text-accent-strong">
+          shipping addresses
+        </Link>
+        .
       </p>
 
       {openings.length === 0 ? (
