@@ -68,18 +68,23 @@ export function InteractivePackDemo({ className }: InteractivePackDemoProps) {
 
   function handleRipped() {
     // Mirrors the real opening flow (OpenPackClient.handleRipped): show the torn-pack art
-    // briefly before the reveal wheel spins, rather than jumping straight to "revealing".
+    // for a beat before the reveal wheel spins, rather than jumping straight to
+    // "revealing" — long enough to actually register, not just flash past.
     setPhase("tearing");
-    window.setTimeout(() => setPhase("revealing"), 700);
+    window.setTimeout(() => setPhase("revealing"), 1100);
   }
 
   function handleRevealSettled() {
     setPhase("resolved");
     // Demo-only: real odds are a fixed 4% derived server-side from the committed
-    // fairness seed (see deriveBonusFlipHit) — this ~40% just makes the flourish easy to
-    // catch while demoing, not a claim about the real trigger rate.
-    setBonusHit(Math.random() < 0.4);
-    window.setTimeout(() => setShowCoinFlip(true), 500);
+    // fairness seed (see deriveBonusFlipHit) — this ~40% just makes the flourish easier to
+    // catch while demoing, not a claim about the real trigger rate. Whatever the rate,
+    // the coin-flip UI itself must only ever appear on a hit — never on every spin.
+    const hit = Math.random() < 0.4;
+    setBonusHit(hit);
+    if (hit) {
+      window.setTimeout(() => setShowCoinFlip(true), 500);
+    }
   }
 
   return (

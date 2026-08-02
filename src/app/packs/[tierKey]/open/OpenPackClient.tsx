@@ -121,21 +121,26 @@ export function OpenPackClient({
       resolvedImage: bonusFlipData?.resolvedImage ?? null,
     });
     setPendingPayment(null);
-    setPhase("revealing");
+    // Always show the torn-pack art for a beat before the reveal wheel spins — settling
+    // via the deferred-payment path would otherwise jump straight to "revealing" and the
+    // torn art would never appear at all; settling immediately would flash past it too
+    // fast on a fast local network to actually register.
+    setPhase("tearing");
+    window.setTimeout(() => setPhase("revealing"), 900);
   }
 
   function handleRevealSettled() {
     setPhase("resolved");
-    if (bonusFlip) {
+    // Only ever show the coin-flip flourish on the small chance the bonus flip actually
+    // hit (4% of opens, server-determined) — it must not appear on every spin.
+    if (bonusFlip?.hit) {
       window.setTimeout(() => setShowCoinFlip(true), 500);
     }
   }
 
   function handleCoinFlipComplete() {
     setShowCoinFlip(false);
-    if (bonusFlip?.hit) {
-      setShowBonusCard(true);
-    }
+    setShowBonusCard(true);
   }
 
   function resetOpeningState() {
