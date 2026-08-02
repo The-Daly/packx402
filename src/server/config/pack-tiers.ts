@@ -62,16 +62,19 @@ const usd = (dollars: number) => Math.round(dollars * USDC_BASE_UNITS_PER_DOLLAR
 const MAX_OBTAINABLE_VALUE_MULTIPLIER = maxObtainableValueMultiplier();
 
 // Beta default availability:
-// - TestNet / Solana / EVM: Spark through Mythic ($250) — everything the current
-//   supplier-purchase bankroll can actually fund.
-// - Algorand MainNet: Spark through Bronze (unrelated, more conservative real-money limit).
-// - Packs above $250 (Crown+): visible but locked — the beta bankroll does not yet cover
-//   funding supplier purchases above this price point. Unlock once that changes.
-// - The same $250 threshold also gates `requiresHighValueReleaseGate`, since a legal/
-//   financial/security review is required before either lock lifts.
-const TESTNET_CEILING: PackTierKey[] = [
-  "spark",
-  "starter",
+// - Only Spark and Starter are unlocked right now — every other tier is visible but
+//   locked. Not a bankroll/legal restriction like Crown+ below: Scout through Mythic are
+//   waiting on the same real-video rip-open treatment Spark/Starter already have (see
+//   PROJECT_STATUS.md's "Real video-driven rip animation" entry) before they reopen.
+// - Algorand MainNet stays scoped to Spark/Starter too (unrelated, more conservative
+//   real-money limit — would need its own review even once TestNet reopens the rest).
+// - Packs above $250 (Crown+): visible but locked for a different reason — the beta
+//   bankroll does not yet cover funding supplier purchases above this price point, and
+//   the same $250 threshold gates `requiresHighValueReleaseGate` (legal/financial/
+//   security review required before either lock lifts).
+const TESTNET_CEILING: PackTierKey[] = ["spark", "starter"];
+const MAINNET_CEILING: PackTierKey[] = ["spark", "starter"];
+const LOCKED_ABOVE: PackTierKey[] = [
   "scout",
   "bronze",
   "silver",
@@ -80,9 +83,11 @@ const TESTNET_CEILING: PackTierKey[] = [
   "platinum",
   "obsidian",
   "mythic",
+  "crown",
+  "vault",
+  "grail",
+  "genesis",
 ];
-const MAINNET_CEILING: PackTierKey[] = ["spark", "starter", "scout", "bronze"];
-const LOCKED_ABOVE: PackTierKey[] = ["crown", "vault", "grail", "genesis"];
 const HIGH_VALUE_GATE_ABOVE: PackTierKey[] = ["crown", "vault", "grail", "genesis"];
 
 function buildTier(

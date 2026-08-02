@@ -36,7 +36,13 @@ production use.
   purchase controls, support, security/audit, feature flags). Generates a clean initial
   migration (`drizzle/0000_daffy_darkstar.sql`).
 - **Pack tier config**: all 14 tiers (Spark–Genesis), integer USDC base units, server-side
-  network/value gating (`src/server/config/pack-tiers.ts`).
+  network/value gating (`src/server/config/pack-tiers.ts`). **Only Spark and Starter are
+  currently unlocked/purchasable** (`TESTNET_CEILING`/`MAINNET_CEILING` both scoped to just
+  those two) — every other tier, including Scout through Mythic which have real art, is
+  locked until they get the same real video-driven rip-open treatment Spark/Starter
+  already have (see the "Real video-driven rip animation" entry below). This is a
+  deliberate temporary narrowing, not a bug — the server-side lock is the actual gate
+  (`isTierPurchasableOn()` + `offer-service.ts`), not just a frontend display state.
 - **Rarity-band pool structure** (`src/server/packs/rarity-bands.ts`): a fixed six-rarity
   odds table (Common 25% / Uncommon 24.8% / Rare 16.1% / Epic 16.1% / Legendary 14% /
   Grail 4%, summing to exactly 100.00%) applied uniformly to all 14 tiers, with each

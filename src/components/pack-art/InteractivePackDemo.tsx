@@ -7,11 +7,11 @@ import { CoinFlip } from "./CoinFlip";
 import { CardOverlaySlot } from "./CardOverlaySlot";
 import { RIP_VIDEO_BY_TIER } from "./rip-video-map";
 
+// Only Spark and Starter are unlocked right now (see pack-tiers.ts's TESTNET_CEILING) —
+// the demo mirrors real availability rather than showcasing locked tiers.
 const DEMO_TIERS: PackShelfItem[] = [
   { tierKey: "spark", tierName: "Spark", price: 500_000 },
-  { tierKey: "scout", tierName: "Scout", price: 2_500_000 },
-  { tierKey: "obsidian", tierName: "Obsidian", price: 100_000_000 },
-  { tierKey: "mythic", tierName: "Mythic", price: 250_000_000 },
+  { tierKey: "starter", tierName: "Starter", price: 1_000_000 },
 ];
 
 // Real Pokemon TCG API images (same ones resolveCardImage would actually resolve in
