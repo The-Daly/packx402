@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { VerifierForm } from "./VerifierForm";
 
 export const metadata = { title: "Provably Fair Center — PackX402" };
@@ -64,7 +65,9 @@ export default function FairnessPage() {
 
       <section className="mt-10">
         <h2 className="mb-4 text-xl font-semibold">Verify a completed pull</h2>
-        <VerifierForm />
+        <Suspense fallback={null}>
+          <VerifierForm />
+        </Suspense>
       </section>
     </div>
   );

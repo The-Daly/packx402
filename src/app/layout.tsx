@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
+import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { LogoutButton } from "@/components/auth/LogoutButton";
+import { AuthAwareHeaderActions, AuthAwareNavLink } from "@/components/auth/AuthAwareHeaderActions";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -59,6 +62,7 @@ function SiteHeader() {
           <Link href="/packs" className="hover:text-foreground">
             Marketplace
           </Link>
+          <AuthAwareNavLink />
           <Link href="/fairness" className="hover:text-foreground">
             Provably Fair
           </Link>
@@ -70,18 +74,15 @@ function SiteHeader() {
           </Link>
         </nav>
         <div className="flex items-center gap-3">
-          <Link
-            href="/login"
-            className="border-border-subtle text-foreground hover:border-accent/50 rounded-md border px-3 py-1.5 text-sm"
-          >
-            Log in
-          </Link>
-          <Link
-            href="/signup"
-            className="bg-accent text-accent-foreground hover:bg-accent-strong rounded-md px-3 py-1.5 text-sm font-medium"
-          >
-            Get started
-          </Link>
+          <AuthAwareHeaderActions
+            signedInSlot={<LogoutButton />}
+            signedOutSlot={
+              <GoogleSignInButton
+                callbackUrl="/"
+                className="border-border-subtle text-foreground hover:border-accent/50 rounded-md border px-3 py-1.5 text-sm"
+              />
+            }
+          />
         </div>
       </div>
     </header>

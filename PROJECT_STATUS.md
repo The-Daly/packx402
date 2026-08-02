@@ -169,16 +169,25 @@ run db:migrate && npm run db:seed` to verify.
   `X-PAYMENT` header, `settleOfferAndOpen` already resolves the actual card, resolves its
   image via `src/server/card-images/resolver.ts`, and the reveal wheel
   (`CardRevealWheel`) spins down to and flips over that real card — this path is wired but
-  not reachable end-to-end without wallet UI. A low-probability (15%), purely cosmetic
-  coin-flip flourish (`CoinFlip.tsx`) can occasionally re-play the reveal spin after
-  landing — it never changes the real fairness-selected card or its odds.
+  not reachable end-to-end without wallet UI. A real 4% bonus-flip mechanic (not the
+  cosmetic version originally shipped — see the "Bonus-flip mechanic" entry above) can
+  award a second card alongside the primary pull, animated via `CoinFlip.tsx` once the
+  server has already determined the real outcome.
+- **Personal opening history** (`/collection` page + `GET /api/packs/openings`): now
+  built — a simple table of the signed-in user's own past pulls (card, set, tier, value,
+  date, a link into the fairness verifier). Not the fuller "personal collection" experience
+  described in the original spec (no shipping status, no showcase/social integration).
+- **Header sign-in** (`layout.tsx`): now real — "Sign in with Google" / "Log out" replace
+  the previous dead `/login`/`/signup` links (those pages never existed). Auth state is
+  checked client-side via `/api/auth/session` after mount rather than in the root layout
+  via `cookies()`, specifically so the rest of the site keeps static generation (checking
+  cookies() in the layout previously forced every single page to render dynamically).
 - **UI pages NOT built**: wallet-center UI (and any wallet-connect flow at all — the
-  opening theater cannot complete a real purchase without this), signup/login forms,
-  personal collection, shipping center, order tracking UI, weekly-free-pack claim UI,
-  loyalty dashboard, referral dashboard, affiliate program UI, social
-  profiles/feed/showcases/clubs/challenges, notifications center, security center,
-  support/dispute UI, and the entire admin dashboard. The data model for all of these
-  exists; the API routes and UI do not.
+  opening theater cannot complete a real purchase without this), shipping center, order
+  tracking UI, weekly-free-pack claim UI, loyalty dashboard, referral dashboard, affiliate
+  program UI, social profiles/feed/showcases/clubs/challenges, notifications center,
+  security center, support/dispute UI, and the entire admin dashboard. The data model for
+  all of these exists; the API routes and UI do not.
 - **Free-pack claim / loyalty recalculation jobs**: pure calculation logic exists and is
   tested; there is no scheduled job or API route that actually grants/claims a weekly pack
   or recalculates a user's loyalty level.

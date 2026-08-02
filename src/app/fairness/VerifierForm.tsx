@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 interface VerifyResponse {
   ripId: string;
@@ -10,13 +11,14 @@ interface VerifyResponse {
 }
 
 export function VerifierForm() {
-  const [ripId, setRipId] = useState("");
+  const searchParams = useSearchParams();
+  const [ripId, setRipId] = useState(() => searchParams.get("ripId") ?? "");
   const [result, setResult] = useState<VerifyResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const autoVerifiedRef = useRef(false);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function verify(id: string) {
     setLoading(true);
     setError(null);
     setResult(null);
@@ -24,7 +26,7 @@ export function VerifierForm() {
       const res = await fetch("/api/fairness/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ripId: ripId.trim() }),
+        body: JSON.stringify({ ripId: id.trim() }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -37,6 +39,21 @@ export function VerifierForm() {
     } finally {
       setLoading(false);
     }
+  }
+
+  // Prefill and auto-verify when arriving via a "Verify" link (e.g. from /collection)
+  // with ?ripId=... already known — saves a manual paste-and-click round trip.
+  useEffect(() => {
+    const fromQuery = searchParams.get("ripId");
+    if (fromQuery && !autoVerifiedRef.current) {
+      autoVerifiedRef.current = true;
+      void verify(fromQuery);
+    }
+  }, [searchParams]);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await verify(ripId);
   }
 
   return (
