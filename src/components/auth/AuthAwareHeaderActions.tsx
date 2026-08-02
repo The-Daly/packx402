@@ -31,14 +31,19 @@ function useAuthenticated(): boolean {
   return authenticated;
 }
 
-/** "My Openings" nav link, shown only once signed in. */
+/** "My Openings" / "Account" nav links, shown only once signed in. */
 export function AuthAwareNavLink() {
   const authenticated = useAuthenticated();
   if (!authenticated) return null;
   return (
-    <Link href="/collection" className="hover:text-foreground">
-      My Openings
-    </Link>
+    <>
+      <Link href="/collection" className="hover:text-foreground">
+        My Openings
+      </Link>
+      <Link href="/account" className="hover:text-foreground">
+        Account
+      </Link>
+    </>
   );
 }
 

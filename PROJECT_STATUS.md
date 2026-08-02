@@ -243,10 +243,17 @@ run db:migrate && npm run db:seed` to verify.
   always a clear default whenever at least one address exists. This is what the
   supplier-purchase worker needs on file before it can complete a real purchase — linked
   to from `/collection`. CSRF-protected like every other mutating route.
-- **UI pages NOT built**: a dedicated wallet-center/account page (connect/disconnect is
-  available inline wherever `ConnectPeraButton` is used, but there's no standalone wallet
-  management page), Defly/Phantom for Solana+EVM (Pera/Algorand only for now), shipping
-  center, order tracking UI, weekly-free-pack claim UI, loyalty dashboard, referral
+- **Account / wallet-center page** (`/account`, linked from the header once signed in):
+  connected wallets (read-only, `GET /api/auth/wallet/list`), active sessions with a
+  "sign out everywhere" control (`SessionsManager`, wired to the existing
+  `GET /api/auth/sessions` / `POST /api/auth/sessions/revoke-all`), and links to the other
+  account-scoped pages. **Not built**: linking an *additional* wallet to an
+  already-authenticated account (needs a nonce-request → sign-arbitrary-message → verify
+  flow with `isLinking: true` — the API supports it, but no UI calls it that way yet;
+  today a wallet only gets linked as this account's payment method the first time a
+  wallet-first user signs in through the opening flow).
+- **UI pages NOT built**: Defly/Phantom for Solana+EVM (Pera/Algorand only for now),
+  order tracking UI, weekly-free-pack claim UI, loyalty dashboard, referral
   dashboard, affiliate program UI, social profiles/feed/showcases/clubs/challenges,
   notifications center, security center, support/dispute UI, and the entire admin
   dashboard. The data model for all of these exists; the API routes and UI do not.
