@@ -9,4 +9,10 @@ import type { PackTierKey } from "@/server/config/pack-tiers";
  */
 export const RIP_VIDEO_BY_TIER: Partial<Record<PackTierKey, { video: string; openStill: string }>> = {
   spark: { video: "/video/open/spark.mp4", openStill: "/packs/spark-open.png" },
+  starter: { video: "/video/open/starter.mp4", openStill: "/packs/starter-open.png" },
+  scout: { video: "/video/open/scout.mp4", openStill: "/packs/scout-open.png" },
+  bronze: { video: "/video/open/bronze.mp4", openStill: "/packs/bronze-open.png" },
+  silver: { video: "/video/open/silver.mp4", openStill: "/packs/silver-open.png" },
+  gold: { video: "/video/open/gold.mp4", openStill: "/packs/gold-open.png" },
+  prism: { video: "/video/open/prism.mp4", openStill: "/packs/prism-open.png" },
 };

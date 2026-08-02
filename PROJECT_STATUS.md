@@ -195,20 +195,23 @@ run db:migrate && npm run db:seed` to verify.
   removed, font mispositioning issues abandoned in favor of no baked-in text at all,
   emblem recentered to fill the face). See `docs/HIGGSFIELD_PROMPTS.md` for the exact
   prompts.
-- **Real video-driven rip animation (Spark only so far)**: replaced the CSS clip-path rip
-  illusion with an actual Higgsfield-generated video of the pack tearing open
-  (`public/video/open/spark.mp4`, via `kling3_0` image-to-image interpolation between a
-  closed-pack still and a torn-open still). `RipToOpenVideo.tsx` maps the user's drag
-  progress directly to `video.currentTime` — dragging scrubs through the real tear
-  frame-by-frame; releasing past the commit threshold plays the video through to the end
-  before firing `onRipped()`; releasing short of it scrubs back to frame 0. Wired into
-  both the real opening theater (`OpenPackClient.tsx`) and the no-DB demo
-  (`InteractivePackDemo.tsx`) via a shared `RIP_VIDEO_BY_TIER` map
-  (`src/components/pack-art/rip-video-map.ts`) — any tier not in that map falls back to
-  the older `RipToOpen`/`PackArt` clip-path treatment, so this is a drop-in tier-by-tier
-  rollout, not an all-or-nothing swap. Verified live: dragged the real page, watched the
-  video's network request succeed and play through to the reveal wheel. The remaining 9
-  tiers still use the CSS clip-path rip — same pipeline (closed + torn stills → kling3_0
+- **Real video-driven rip animation (7 of 10 unlocked tiers)**: replaced the CSS clip-path
+  rip illusion with an actual Higgsfield-generated video of the pack tearing open
+  (`public/video/open/{tier}.mp4` for Spark, Starter, Scout, Bronze, Silver, Gold, Prism,
+  via `kling3_0` image-to-image interpolation between a closed-pack still and a torn-open
+  still). `RipToOpenVideo.tsx` maps the user's drag progress directly to
+  `video.currentTime` — dragging scrubs through the real tear frame-by-frame; releasing
+  past the commit threshold plays the video through to the end before firing
+  `onRipped()`; releasing short of it scrubs back to frame 0. Wired into both the real
+  opening theater (`OpenPackClient.tsx`) and the no-DB demo (`InteractivePackDemo.tsx`)
+  via a shared `RIP_VIDEO_BY_TIER` map (`src/components/pack-art/rip-video-map.ts`) — any
+  tier not in that map falls back to the older `RipToOpen`/`PackArt` clip-path treatment,
+  so this is a drop-in tier-by-tier rollout, not an all-or-nothing swap. Verified live for
+  Spark: dragged the real page, watched the video's network request succeed and play
+  through to the reveal wheel; Scout and Starter's tear position/style were confirmed
+  correct by direct user review of the generated stills. **Platinum, Obsidian, and Mythic
+  do not have a video yet** — generation stopped mid-batch when the Higgsfield workspace
+  ran out of credits; same pipeline (closed + torn stills → kling3_0
   interpolation) needed per tier once art is finalized.
 - **Mock CardTrader fixture ladder refreshed with live market data**: replaced the
   ~20-card hand-authored mock inventory (`src/server/suppliers/cardtrader/fixtures.ts`)
