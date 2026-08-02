@@ -4,6 +4,7 @@ import Link from "next/link";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import { AuthAwareHeaderActions, AuthAwareNavLink } from "@/components/auth/AuthAwareHeaderActions";
+import { WalletManagerProvider } from "@/components/wallet/WalletManagerProvider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -33,11 +34,13 @@ export default function RootLayout({
         <a href="#main-content" className="skip-link">
           Skip to main content
         </a>
-        <SiteHeader />
-        <main id="main-content" className="flex-1">
-          {children}
-        </main>
-        <SiteFooter />
+        <WalletManagerProvider>
+          <SiteHeader />
+          <main id="main-content" className="flex-1">
+            {children}
+          </main>
+          <SiteFooter />
+        </WalletManagerProvider>
       </body>
     </html>
   );

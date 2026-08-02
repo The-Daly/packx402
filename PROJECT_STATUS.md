@@ -163,18 +163,25 @@ run db:migrate && npm run db:seed` to verify.
   reference values and a "max obtainable card value" summary), provably-fair verifier
   (with a real working `/api/fairness/verify` endpoint), odds library + JSON download, and
   an opening-theater page at `/packs/[tierKey]/open` (see below).
-- **Opening theater** (`/packs/[tierKey]/open`): real page, not a mock. Carousel to browse
-  tiers → drag-to-rip gesture (`RipToOpen`) → calls the real
-  `/api/x402/algorand/v1/packs/open` endpoint to create a pack offer → since there is
-  still no wallet-connect UI, the real `PaymentRequirements` (amount, payTo) are displayed
-  honestly instead of a fake reveal. If a wallet flow is added later and supplies a real
-  `X-PAYMENT` header, `settleOfferAndOpen` already resolves the actual card, resolves its
-  image via `src/server/card-images/resolver.ts`, and the reveal wheel
-  (`CardRevealWheel`) spins down to and flips over that real card — this path is wired but
-  not reachable end-to-end without wallet UI. A real 4% bonus-flip mechanic (not the
-  cosmetic version originally shipped — see the "Bonus-flip mechanic" entry above) can
-  award a second card alongside the primary pull, animated via `CoinFlip.tsx` once the
-  server has already determined the real outcome.
+- **Opening theater** (`/packs/[tierKey]/open`): real page, not a mock. Pack shelf →
+  drag-to-rip gesture (`RipToOpen`) → calls the real `/api/x402/algorand/v1/packs/open`
+  endpoint to create a pack offer → **Pera Wallet is now really wired up**
+  (`@txnlab/use-wallet-react` + `@perawallet/connect`, both real installed packages, no
+  stubs — `WalletManagerProvider`, `ConnectPeraButton`, `PayWithWalletButton`). Connecting
+  Pera, building a real Algorand ASA-transfer transaction from the server's own
+  `PaymentRequirements`, signing it via `transactionSigner`, submitting to algod, waiting
+  for confirmation, and re-POSTing with a real `X-PAYMENT` header are all implemented per
+  the documented adapter contract (`algorand-adapter.ts`'s `decodePaymentHeader`). What's
+  **not verified in this environment**: no funded TestNet Pera wallet was available here to
+  actually click through connect → sign → submit → settle end to end, and the DB-backed
+  page itself needs Postgres to load at all (see next steps) — this is the same
+  "implemented against the documented contract, unverified live" status as CardTrader/x402
+  live mode elsewhere in this repo. `settleOfferAndOpen` resolves the actual card, resolves
+  its image via `src/server/card-images/resolver.ts`, and the reveal wheel
+  (`CardRevealWheel`) spins down to and flips over that real card. A real 4% bonus-flip
+  mechanic (not the cosmetic version originally shipped — see the "Bonus-flip mechanic"
+  entry above) can award a second card alongside the primary pull, animated via
+  `CoinFlip.tsx` once the server has already determined the real outcome.
 - **Personal opening history** (`/collection` page + `GET /api/packs/openings`): now
   built — a simple table of the signed-in user's own past pulls (card, set, tier, value,
   date, a link into the fairness verifier). Not the fuller "personal collection" experience
@@ -184,12 +191,13 @@ run db:migrate && npm run db:seed` to verify.
   checked client-side via `/api/auth/session` after mount rather than in the root layout
   via `cookies()`, specifically so the rest of the site keeps static generation (checking
   cookies() in the layout previously forced every single page to render dynamically).
-- **UI pages NOT built**: wallet-center UI (and any wallet-connect flow at all — the
-  opening theater cannot complete a real purchase without this), shipping center, order
-  tracking UI, weekly-free-pack claim UI, loyalty dashboard, referral dashboard, affiliate
-  program UI, social profiles/feed/showcases/clubs/challenges, notifications center,
-  security center, support/dispute UI, and the entire admin dashboard. The data model for
-  all of these exists; the API routes and UI do not.
+- **UI pages NOT built**: a dedicated wallet-center/account page (connect/disconnect is
+  available inline wherever `ConnectPeraButton` is used, but there's no standalone wallet
+  management page), Defly/Phantom for Solana+EVM (Pera/Algorand only for now), shipping
+  center, order tracking UI, weekly-free-pack claim UI, loyalty dashboard, referral
+  dashboard, affiliate program UI, social profiles/feed/showcases/clubs/challenges,
+  notifications center, security center, support/dispute UI, and the entire admin
+  dashboard. The data model for all of these exists; the API routes and UI do not.
 - **Free-pack claim / loyalty recalculation jobs**: pure calculation logic exists and is
   tested; there is no scheduled job or API route that actually grants/claims a weekly pack
   or recalculates a user's loyalty level.
@@ -237,10 +245,10 @@ run db:migrate && npm run db:seed` to verify.
 3. Build a UI page for `POST /api/auth/oauth/complete-eligibility` (DOB/country/terms) —
    the API is implemented and enforced at purchase time, but there's no page collecting
    it yet.
-4. Build a real wallet-connect flow (Pera/Defly for Algorand, Phantom for Solana/EVM) —
-   the other blocker keeping the opening theater from completing a real purchase end to
-   end; everything past payment (settlement, fairness reveal, card image resolution,
-   reveal animation) is already wired and ready to receive it.
+4. Pera Wallet (Algorand) is now wired up for real — get a funded TestNet account into
+   Pera and click through connect → sign → submit → settle end to end for the first time;
+   nothing in this environment could exercise that live. Defly and Phantom (Solana/EVM)
+   still need their own connect flows built the same way.
 5. Build the supplier-purchase worker process (a long-running consumer of the
    `supplier_purchases` queue) — currently only enqueues, never processes.
 6. Wire real rolling-spend aggregation into `offer-service.ts`'s limit check.

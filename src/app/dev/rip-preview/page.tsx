@@ -5,6 +5,7 @@ import { PackShelf, type PackShelfItem } from "@/components/pack-art/PackShelf";
 import { OpeningStage, type OpeningPhase } from "@/components/pack-art/OpeningStage";
 import { CoinFlip } from "@/components/pack-art/CoinFlip";
 import { CardOverlaySlot } from "@/components/pack-art/CardOverlaySlot";
+import { ConnectPeraButton } from "@/components/wallet/ConnectPeraButton";
 
 const DEMO_TIERS: PackShelfItem[] = [
   { tierKey: "mythic", tierName: "Mythic", price: 250_000_000 },
@@ -65,6 +66,10 @@ export default function RipPreviewPage() {
       </p>
 
       <h1 className="mb-6 text-center text-xl font-semibold">Rip-open animation preview</h1>
+
+      <div className="mb-6 flex justify-center">
+        <ConnectPeraButton />
+      </div>
 
       {hasSelectedPack ? (
         <>

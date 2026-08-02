@@ -24,6 +24,8 @@ interface PendingPayment {
   offerId: string;
   amountBaseUnits: string;
   payTo: string;
+  asset: string;
+  network: string;
 }
 
 interface BonusFlipResult {
@@ -84,21 +86,14 @@ export function OpenPackClient({
           offerId: data.offerId,
           amountBaseUnits: data.accepts[0].amountBaseUnits ?? data.accepts[0].amount,
           payTo: data.accepts[0].payTo,
+          asset: data.accepts[0].asset,
+          network: data.accepts[0].network,
         });
-        setPhase("idle"); // no wallet-connect UI yet — surface the payment panel instead of faking a reveal
+        setPhase("idle"); // payment now happens via PaymentMethodPanel's connected wallet
         return;
       }
       if (res.ok && data.card) {
-        // Reachable once a real wallet flow supplies X-PAYMENT — not exercised in this
-        // beta yet, but the response contract (including bonusFlip) is already real.
-        setCardName(data.card.name);
-        setResolvedImage(data.resolvedImage ?? null);
-        setBonusFlip({
-          hit: Boolean(data.bonusFlip?.hit),
-          cardName: data.bonusFlip?.card?.name ?? null,
-          resolvedImage: data.bonusFlip?.resolvedImage ?? null,
-        });
-        setPhase("revealing");
+        applySettledResult(data);
         return;
       }
       setError(data.message ?? "Could not start this pack opening.");
@@ -107,6 +102,26 @@ export function OpenPackClient({
       setError("Network error creating pack offer.");
       setPhase("idle");
     }
+  }
+
+  /** Shared by both the (rare) case where handleRipped's own request already settled and
+   * PayWithWalletButton's onSettled callback after a real signed payment completes. Only
+   * ever called with a genuine server response — never fabricates a card or bonus-flip
+   * outcome client-side. */
+  function applySettledResult(data: Record<string, unknown>) {
+    const card = data.card as { name: string } | null | undefined;
+    const bonusFlipData = data.bonusFlip as
+      | { hit?: boolean; card?: { name: string }; resolvedImage?: ResolvedCardImage }
+      | undefined;
+    setCardName(card?.name ?? null);
+    setResolvedImage((data.resolvedImage as ResolvedCardImage | null) ?? null);
+    setBonusFlip({
+      hit: Boolean(bonusFlipData?.hit),
+      cardName: bonusFlipData?.card?.name ?? null,
+      resolvedImage: bonusFlipData?.resolvedImage ?? null,
+    });
+    setPendingPayment(null);
+    setPhase("revealing");
   }
 
   function handleRevealSettled() {
@@ -197,8 +212,12 @@ export function OpenPackClient({
 
             {pendingPayment && (
               <PaymentMethodPanel
+                offerId={pendingPayment.offerId}
                 amountBaseUnits={pendingPayment.amountBaseUnits}
                 payTo={pendingPayment.payTo}
+                asset={pendingPayment.asset}
+                network={pendingPayment.network}
+                onSettled={applySettledResult}
                 className="mt-6"
               />
             )}

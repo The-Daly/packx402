@@ -1,25 +1,36 @@
 "use client";
 
 import { usdcBaseUnitsToDisplayString } from "@/shared/money";
+import { PayWithWalletButton } from "@/components/wallet/PayWithWalletButton";
 
 export interface PaymentMethodPanelProps {
+  offerId: string;
   amountBaseUnits: string;
   payTo: string;
+  asset: string;
+  network: string;
+  onSettled: (data: Record<string, unknown>) => void;
   className?: string;
 }
 
 /**
- * Payment-method chooser shown once a real x402 offer exists. "Pay with wallet" is the
- * one method actually wired up (crypto/x402 — see offer-service.ts); it still can't
- * complete a payment from here because there's no wallet-connect UI yet (see
- * PROJECT_STATUS.md), so it shows the real offer details rather than faking success.
- * Apple Pay and PayPal are rendered realistically but disabled — neither has a real
- * merchant account/credential configured (no APPLE_MERCHANT_ID, no PayPal client ID),
- * so wiring them further would mean building a checkout button that cannot actually
- * charge anyone. Matches this repo's existing pattern for CardTrader/x402 live mode:
- * documented and visible, never faked as working.
+ * Payment-method chooser shown once a real x402 offer exists. "Pay with wallet" is fully
+ * wired up end to end: connect Pera, sign a real ASA transfer, submit it, and settle —
+ * see PayWithWalletButton. Apple Pay and PayPal are rendered realistically but disabled —
+ * neither has a real merchant account/credential configured (no APPLE_MERCHANT_ID, no
+ * PayPal client ID), so wiring them further would mean building a checkout button that
+ * cannot actually charge anyone. Matches this repo's existing pattern for CardTrader/x402
+ * live mode: documented and visible, never faked as working.
  */
-export function PaymentMethodPanel({ amountBaseUnits, payTo, className }: PaymentMethodPanelProps) {
+export function PaymentMethodPanel({
+  offerId,
+  amountBaseUnits,
+  payTo,
+  asset,
+  network,
+  onSettled,
+  className,
+}: PaymentMethodPanelProps) {
   return (
     <div className={["border-border-subtle bg-surface rounded-md border p-4 text-sm", className ?? ""].join(" ")}>
       <p className="font-semibold">
@@ -28,14 +39,15 @@ export function PaymentMethodPanel({ amountBaseUnits, payTo, className }: Paymen
 
       <div className="mt-3 flex flex-col gap-2">
         <div className="border-accent/40 bg-background rounded-md border p-3">
-          <p className="text-xs font-semibold tracking-wide uppercase">Wallet (crypto)</p>
-          <p className="text-muted mt-1 font-mono text-xs break-all">{payTo}</p>
-          <p className="text-muted mt-2 text-xs">
-            Wallet-connect UI isn&apos;t live yet during this beta, so payment can&apos;t be
-            completed from here — the offer above is real and expires shortly. Once a
-            wallet is connected, this same flow settles payment and reveals your actual
-            card.
-          </p>
+          <p className="mb-2 text-xs font-semibold tracking-wide uppercase">Wallet (crypto)</p>
+          <PayWithWalletButton
+            offerId={offerId}
+            amountBaseUnits={amountBaseUnits}
+            payTo={payTo}
+            asset={asset}
+            network={network}
+            onSettled={onSettled}
+          />
         </div>
 
         <button
