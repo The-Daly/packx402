@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, isNull } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import {
   eligibilityRecords,
@@ -14,6 +14,7 @@ import {
   supplierListings,
   supplierPurchases,
 } from "@/server/db/schema";
+import type { RollingSpendSnapshot } from "@/server/responsible-purchasing/limits";
 import { serverEnv } from "@/server/env";
 import {
   getPackTierDefinition,
@@ -67,6 +68,50 @@ function assetFor(chain: Chain): string {
     case "evm":
       return serverEnv.EVM_USDC_ADDRESS;
   }
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Aggregates a user's actual settled spend over rolling 24h/7d/30d windows (not calendar
+ * day/week/month — the schema has no per-user timezone to anchor a calendar boundary to,
+ * and a rolling window is the more conservative choice for a spend *limit* anyway). Only
+ * `status: "settled"` payments count — a pending/failed/refunded payment was never
+ * fulfilled spend. Uses `settledAmountUsdcBaseUnits` when present, falling back to
+ * `expectedAmountUsdcBaseUnits` for older rows that predate that column being populated.
+ */
+async function getRollingSpend(userId: string, now: Date): Promise<RollingSpendSnapshot> {
+  const monthAgo = new Date(now.getTime() - 30 * DAY_MS);
+  const weekAgo = new Date(now.getTime() - 7 * DAY_MS);
+  const dayAgo = new Date(now.getTime() - DAY_MS);
+
+  const rows = await db
+    .select({
+      settledAt: payments.settledAt,
+      settledAmountUsdcBaseUnits: payments.settledAmountUsdcBaseUnits,
+      expectedAmountUsdcBaseUnits: payments.expectedAmountUsdcBaseUnits,
+    })
+    .from(payments)
+    .innerJoin(packOffers, eq(packOffers.id, payments.packOfferId))
+    .where(
+      and(
+        eq(packOffers.userId, userId),
+        eq(payments.status, "settled"),
+        gte(payments.settledAt, monthAgo),
+      ),
+    );
+
+  let spentTodayUsdcBaseUnits = 0;
+  let spentThisWeekUsdcBaseUnits = 0;
+  let spentThisMonthUsdcBaseUnits = 0;
+  for (const row of rows) {
+    const amount = row.settledAmountUsdcBaseUnits ?? row.expectedAmountUsdcBaseUnits ?? 0;
+    spentThisMonthUsdcBaseUnits += amount;
+    if (row.settledAt && row.settledAt >= weekAgo) spentThisWeekUsdcBaseUnits += amount;
+    if (row.settledAt && row.settledAt >= dayAgo) spentTodayUsdcBaseUnits += amount;
+  }
+
+  return { spentTodayUsdcBaseUnits, spentThisWeekUsdcBaseUnits, spentThisMonthUsdcBaseUnits };
 }
 
 /**
@@ -138,12 +183,10 @@ export async function createPackOffer(params: {
     .where(eq(purchaseLimits.userId, params.userId))
     .limit(1);
 
-  // Rolling spend aggregation against fulfilled/paid orders would normally be computed
-  // here via a windowed query over `pack_offers`/`payments`; left as a documented
-  // follow-up (see PROJECT_STATUS.md) since it requires a live database to validate.
-  // The gate itself (evaluatePurchaseAgainstLimits) is fully implemented and unit-tested.
+  const now = new Date();
+  const rollingSpend = await getRollingSpend(params.userId, now);
   const decision = evaluatePurchaseAgainstLimits({
-    now: new Date(),
+    now,
     priceUsdcBaseUnits: tierRow.priceUsdcBaseUnits,
     limits: {
       dailyLimitUsdcBaseUnits: limits?.dailyLimitUsdcBaseUnits ?? null,
@@ -157,9 +200,9 @@ export async function createPackOffer(params: {
       endsAt: selfExclusion?.endsAt ?? null,
     },
     rollingSpend: {
-      spentTodayUsdcBaseUnits: 0,
-      spentThisWeekUsdcBaseUnits: 0,
-      spentThisMonthUsdcBaseUnits: 0,
+      spentTodayUsdcBaseUnits: rollingSpend.spentTodayUsdcBaseUnits,
+      spentThisWeekUsdcBaseUnits: rollingSpend.spentThisWeekUsdcBaseUnits,
+      spentThisMonthUsdcBaseUnits: rollingSpend.spentThisMonthUsdcBaseUnits,
     },
   });
   if (!decision.allowed) {

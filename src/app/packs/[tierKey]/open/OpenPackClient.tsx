@@ -57,6 +57,7 @@ export function OpenPackClient({
   const [phase, setPhase] = useState<OpeningPhase>("idle");
   const [pendingPayment, setPendingPayment] = useState<PendingPayment | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [needsEligibility, setNeedsEligibility] = useState(false);
   const [wheelKey, setWheelKey] = useState(0);
   const [possibleCards, setPossibleCards] = useState<SpinPossibleCard[]>([]);
   const [cardName, setCardName] = useState<string | null>(null);
@@ -68,6 +69,7 @@ export function OpenPackClient({
   async function handleRipped() {
     setPhase("tearing");
     setError(null);
+    setNeedsEligibility(false);
     try {
       const res = await fetch("/api/x402/algorand/v1/packs/open", {
         method: "POST",
@@ -78,6 +80,12 @@ export function OpenPackClient({
 
       if (res.status === 401) {
         setError("Sign in to open a pack.");
+        setPhase("idle");
+        return;
+      }
+      if (res.status === 422 && data.error === "eligibility_required") {
+        setError("Confirm your age and location before opening a pack.");
+        setNeedsEligibility(true);
         setPhase("idle");
         return;
       }
@@ -146,6 +154,7 @@ export function OpenPackClient({
   function resetOpeningState() {
     setPendingPayment(null);
     setError(null);
+    setNeedsEligibility(false);
     setPhase("idle");
     setWheelKey((k) => k + 1);
     setCardName(null);
@@ -212,6 +221,14 @@ export function OpenPackClient({
               <div className="mt-4 text-center">
                 <p className="text-sm text-red-400">{error}</p>
                 {error.startsWith("Sign in") && signInSlot}
+                {needsEligibility && (
+                  <Link
+                    href="/eligibility"
+                    className="text-accent hover:text-accent-strong mt-2 inline-block text-sm font-semibold"
+                  >
+                    Confirm eligibility →
+                  </Link>
+                )}
               </div>
             )}
 

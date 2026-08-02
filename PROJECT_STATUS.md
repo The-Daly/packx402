@@ -144,14 +144,25 @@ production use.
   Drizzle schema (a strong signal — Drizzle's generated types catch field/type mismatches
   at compile time) but **has not been run end-to-end against a live Postgres database** in
   this environment.
-- **Responsible-purchasing rolling-spend aggregation**: the limit _decision_ logic is
-  fully tested; the query that aggregates a user's actual rolling daily/weekly/monthly
-  spend from fulfilled orders is a documented follow-up (`offer-service.ts` currently
-  passes zeros) — needs a live DB to build and validate correctly.
-- **Supplier purchase queue**: `SupplierPurchase` rows are created with `status: "queued"`
-  on a successful open; the actual serialized, one-at-a-time-per-account worker process
-  that consumes this queue (spec section 39) is **not implemented** — this needs a
-  long-running worker process (not just a route handler) and is the top follow-up item.
+- **Responsible-purchasing rolling-spend aggregation**: `getRollingSpend()` in
+  `offer-service.ts` now sums real settled payments (`payments.status = "settled"`, joined
+  through `pack_offers.userId`) over rolling 24h/7d/30d windows — replacing the previous
+  `passes zeros` stub — and feeds directly into `evaluatePurchaseAgainstLimits()`. Uses
+  rolling windows, not calendar day/week/month, since no per-user timezone exists in the
+  schema. Type-checks cleanly; unverified against a live DB like everything else here.
+- **Supplier purchase queue worker**: `src/server/suppliers/purchase-worker.ts` now
+  consumes the `supplier_purchases` queue (spec sections 39-40) — a real long-running
+  process (`npm run worker:supplier-purchases`, not a request handler), with a row-level
+  claim (conditional `UPDATE ... WHERE status = 'queued'`) so concurrent workers can't
+  double-process one row. Runs validate → add-to-cart → confirm → purchase against
+  `getCardTraderProvider()`, records a `fulfillments` row and `pack_offers.status` update
+  on success. **Documented gaps, not silently solved**: no cross-*process* lock for
+  multiple workers against the same supplier account (needs Redis, not built — no live
+  infra available); no substitution-search-on-unavailable per spec section 40 (no
+  configured price-increase tolerance exists to drive it — marks the row `failed` instead
+  of rerolling, which would violate the fairness proof); fails clearly with
+  `no_shipping_address_on_file` since there's no UI yet to add one. See
+  `docs/SUPPLIER_INTEGRATION.md`.
 - **Migrations**: `drizzle-kit generate` produces a valid migration and Drizzle's schema
   graph validates cleanly, but the migration has not been _applied_ to a real Postgres
   instance in this environment (no Docker available). Run `docker compose up -d && npm
@@ -219,6 +230,11 @@ run db:migrate && npm run db:seed` to verify.
   checked client-side via `/api/auth/session` after mount rather than in the root layout
   via `cookies()`, specifically so the rest of the site keeps static generation (checking
   cookies() in the layout previously forced every single page to render dynamically).
+- **Eligibility completion page** (`/eligibility`): now built — collects DOB, country
+  (+US state), and the 18+ acknowledgment via `POST /api/auth/oauth/complete-eligibility`
+  (now CSRF-protected, matching its sibling mutating routes). `OpenPackClient` links here
+  automatically when pack-offer creation fails with `eligibility_required`. This is a UX
+  convenience only — `createPackOffer()` remains the real, unbypassable server-side gate.
 - **UI pages NOT built**: a dedicated wallet-center/account page (connect/disconnect is
   available inline wherever `ConnectPeraButton` is used, but there's no standalone wallet
   management page), Defly/Phantom for Solana+EVM (Pera/Algorand only for now), shipping
@@ -270,22 +286,26 @@ run db:migrate && npm run db:seed` to verify.
 2. Create a real Google OAuth client (see `docs/GOOGLE_OAUTH_SETUP.md`) and set
    `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` in `.env.local` to actually test Google
    sign-in end to end.
-3. Build a UI page for `POST /api/auth/oauth/complete-eligibility` (DOB/country/terms) —
-   the API is implemented and enforced at purchase time, but there's no page collecting
-   it yet.
+3. ~~Build a UI page for `POST /api/auth/oauth/complete-eligibility`~~ — done, see
+   `/eligibility` above.
 4. Pera Wallet (Algorand) is now wired up for real — get a funded TestNet account into
    Pera and click through connect → sign → submit → settle end to end for the first time;
    nothing in this environment could exercise that live. Defly and Phantom (Solana/EVM)
    still need their own connect flows built the same way.
-5. Build the supplier-purchase worker process (a long-running consumer of the
-   `supplier_purchases` queue) — currently only enqueues, never processes.
-6. Wire real rolling-spend aggregation into `offer-service.ts`'s limit check.
+5. ~~Build the supplier-purchase worker process~~ — done, see
+   `src/server/suppliers/purchase-worker.ts` above. Still needs: a shipping-address UI
+   (the worker fails clearly rather than guessing when none exists), and a cross-process
+   lock if ever running more than one worker instance against the same supplier account.
+6. ~~Wire real rolling-spend aggregation into `offer-service.ts`'s limit check~~ — done,
+   see `getRollingSpend()` above.
 7. Wire a live CardTrader photo/catalog credential (or PSA/public-catalog credential) into
    `src/server/card-images/resolver.ts`'s provider stubs so real card images resolve
    instead of always falling back to the placeholder.
 8. Obtain CardTrader and GoPlausible sandbox credentials and run an actual integration
    test pass before ever setting `CARDTRADER_MODE=live` or
    `X402_FACILITATOR_MODE=live` outside of TestNet dry runs.
+9. Build a shipping-address UI (add/edit/select default) — the supplier-purchase worker
+   needs one on file per user before it can actually complete a purchase.
 
 ## Beta restrictions verified present in code
 

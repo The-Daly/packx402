@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { SESSION_COOKIE_NAME, validateSessionToken } from "@/server/auth/session";
 import { submitOAuthEligibility } from "@/server/auth/auth-service";
+import { verifyCsrf } from "@/server/security/csrf";
 
 /**
  * Closes the eligibility gap noted in auth-service.ts's findOrCreateGoogleUser /
@@ -19,6 +20,10 @@ const bodySchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  if (!verifyCsrf(req)) {
+    return NextResponse.json({ error: "csrf_failed" }, { status: 403 });
+  }
+
   const token = req.cookies.get(SESSION_COOKIE_NAME)?.value;
   if (!token) {
     return NextResponse.json({ error: "authentication_required" }, { status: 401 });

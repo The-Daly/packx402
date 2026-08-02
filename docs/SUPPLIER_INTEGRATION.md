@@ -40,12 +40,28 @@ serialized queue: one `queued` row per rip, unique on `idempotencyKey`. Both pro
 (tested in the mock provider). `purchaseListing()` is idempotent: replaying the same
 idempotency key returns the original order instead of creating a duplicate (tested).
 
-**Not yet implemented**: the actual worker process that consumes the `supplier_purchases`
-queue one row at a time per supplier account. Today, `offer-service.ts` only _enqueues_ a
-row with `status: "queued"` — nothing processes it yet. This is the top follow-up item in
-PROJECT_STATUS.md. A production implementation needs a long-running worker (not a request
-handler) holding a Redis-based lock per supplier account for the duration of each
-add-to-cart → confirm → purchase sequence.
+**Now implemented**: `src/server/suppliers/purchase-worker.ts` consumes the
+`supplier_purchases` queue — `runSupplierPurchaseWorkerLoop()` polls for the oldest
+`queued` row (claimed via a conditional `UPDATE ... WHERE status = 'queued'`, safe against
+two workers racing the same row), then runs validate → add-to-cart → confirm → purchase
+against `getCardTraderProvider()`, records the outcome (`purchased` + a `fulfillments` row,
+or `failed` + a reason), and updates the parent `pack_offers.status`. Run it with `npm run
+worker:supplier-purchases` (entry point: `src/server/suppliers/run-worker.ts`) as its own
+long-running process — not a request handler, not a cron job.
+
+**Known gaps in the worker, left as documented follow-ups** (not silently solved):
+- **Cross-account serialization**: the row-level claim prevents double-processing one row,
+  but running more than one worker *process* against the same supplier account still needs
+  an external lock (e.g. Redis) — not implemented, no live infrastructure was available to
+  build and verify one.
+- **Substitution-on-unavailable (spec section 40)**: if a listing is out of stock/removed,
+  the worker marks the row `failed` rather than searching for a substitute — there is no
+  configured procurement-price-increase tolerance anywhere in this codebase to drive that
+  search, and rerolling would violate the fairness proof. A human resolves it manually today.
+- **No shipping address on file**: marks the row `failed` with `no_shipping_address_on_file`
+  — there is no UI yet for a user to add one (see PROJECT_STATUS.md's UI gaps list).
+- Unverified against a live Postgres/CardTrader account, like everything else DB-dependent
+  in this repo (see PROJECT_STATUS.md's environment-constraints note).
 
 ## Failure process (spec section 40)
 
