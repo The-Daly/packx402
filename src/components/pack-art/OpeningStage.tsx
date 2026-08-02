@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { PackTierKey } from "@/server/config/pack-tiers";
 import { PackArt } from "./PackArt";
 import { CardOverlaySlot } from "./CardOverlaySlot";
-import { CardRevealWheel } from "./CardRevealWheel";
+import { CardRevealWheel, type SpinPossibleCard } from "./CardRevealWheel";
 import { RipToOpen } from "./RipToOpen";
 import { ResultEffect, type ResultIntensity } from "./ResultEffect";
 import type { ResolvedCardImage } from "@/shared/card-image";
@@ -18,6 +18,9 @@ export interface OpeningStageProps {
   phase: OpeningPhase;
   cardName?: string;
   resolvedImage?: ResolvedCardImage | null;
+  /** Real possible pulls from this pack's pool, shown cycling during the spin — see
+   * CardRevealWheel. */
+  possibleCards?: SpinPossibleCard[];
   resultIntensity?: ResultIntensity;
   /** Future hooks — see docs/ASSET_MANIFEST.md (pack402_idle_*, pack402_open_single_*). */
   idleVideoSrc?: string;
@@ -58,6 +61,7 @@ export function OpeningStage({
   phase,
   cardName,
   resolvedImage,
+  possibleCards,
   resultIntensity = "standard",
   idleVideoSrc,
   openingVideoSrc,
@@ -108,6 +112,7 @@ export function OpeningStage({
           <CardRevealWheel
             cardName={cardName ?? "Your card"}
             resolvedImage={resolvedImage ?? null}
+            possibleCards={possibleCards}
             onSpinComplete={() => onSpinComplete?.()}
             className="relative z-10"
           />

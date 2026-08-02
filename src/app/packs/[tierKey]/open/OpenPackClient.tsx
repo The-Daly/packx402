@@ -2,15 +2,16 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { PackCarousel, type PackCarouselItem } from "@/components/pack-art/PackCarousel";
+import { PackShelf, type PackShelfItem } from "@/components/pack-art/PackShelf";
 import { OpeningStage, type OpeningPhase } from "@/components/pack-art/OpeningStage";
 import { CoinFlip } from "@/components/pack-art/CoinFlip";
+import type { SpinPossibleCard } from "@/components/pack-art/CardRevealWheel";
+import { PaymentMethodPanel } from "@/components/payments/PaymentMethodPanel";
 import type { PackTierKey } from "@/server/config/pack-tiers";
 import type { ResolvedCardImage } from "@/shared/card-image";
-import { usdcBaseUnitsToDisplayString } from "@/shared/money";
 
 export interface OpenPackClientProps {
-  tiers: PackCarouselItem[];
+  tiers: PackShelfItem[];
   initialTierKey: PackTierKey;
   initialLocked: boolean;
   /** Rendered when a 401 requires sign-in — a Server Component (GoogleSignInButton uses a
@@ -42,7 +43,7 @@ export function OpenPackClient({
   initialLocked,
   signInSlot,
 }: OpenPackClientProps) {
-  const [selected, setSelected] = useState<PackCarouselItem>(
+  const [selected, setSelected] = useState<PackShelfItem>(
     tiers.find((t) => t.tierKey === initialTierKey) ?? tiers[0],
   );
   const [locked, setLocked] = useState(initialLocked);
@@ -52,6 +53,7 @@ export function OpenPackClient({
   const [error, setError] = useState<string | null>(null);
   const [showCoinFlip, setShowCoinFlip] = useState(false);
   const [wheelKey, setWheelKey] = useState(0);
+  const [possibleCards, setPossibleCards] = useState<SpinPossibleCard[]>([]);
 
   // Populated once a real wallet-connect flow supplies X-PAYMENT and settlement succeeds —
   // not reachable yet in this beta (no wallet-connect UI), so these stay null for now.
@@ -115,6 +117,18 @@ export function OpenPackClient({
     setWheelKey((k) => k + 1);
   }
 
+  async function loadPossibleCards(tierKey: string) {
+    setPossibleCards([]);
+    try {
+      const res = await fetch(`/api/packs/${tierKey}/spin-preview`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setPossibleCards(Array.isArray(data.cards) ? data.cards : []);
+    } catch {
+      // Non-critical — the wheel falls back to generic card backs when this is empty.
+    }
+  }
+
   return (
     <div>
       <h1 className="mb-2 text-center text-2xl font-semibold">Open a pack</h1>
@@ -134,6 +148,7 @@ export function OpenPackClient({
               phase={phase}
               cardName={cardName ?? undefined}
               resolvedImage={resolvedImage}
+              possibleCards={possibleCards}
               onRipped={handleRipped}
               onSpinComplete={handleRevealSettled}
             />
@@ -148,18 +163,11 @@ export function OpenPackClient({
             )}
 
             {pendingPayment && (
-              <div className="border-border-subtle bg-surface mt-6 rounded-md border p-4 text-sm">
-                <p className="font-semibold">Payment required</p>
-                <p className="text-muted mt-1">
-                  ${usdcBaseUnitsToDisplayString(Number(pendingPayment.amountBaseUnits))} USDC to{" "}
-                  <span className="font-mono text-xs">{pendingPayment.payTo}</span>
-                </p>
-                <p className="text-muted mt-2 text-xs">
-                  Wallet-connect UI isn&apos;t live yet during this beta, so payment can&apos;t be
-                  completed from here — the offer above is real and expires shortly. Once a wallet
-                  is connected, this same flow settles payment and reveals your actual card.
-                </p>
-              </div>
+              <PaymentMethodPanel
+                amountBaseUnits={pendingPayment.amountBaseUnits}
+                payTo={pendingPayment.payTo}
+                className="mt-6"
+              />
             )}
 
             <button
@@ -186,23 +194,15 @@ export function OpenPackClient({
         </div>
       )}
 
-      <PackCarousel
+      <PackShelf
         items={tiers}
-        initialIndex={Math.max(
-          0,
-          tiers.findIndex((t) => t.tierKey === selected.tierKey),
-        )}
+        selectedTierKey={hasSelectedPack ? selected.tierKey : undefined}
         onSelect={(item) => {
-          setSelected(item);
-          setLocked(item.locked ?? false);
-          setHasSelectedPack(false);
-          resetOpeningState();
-        }}
-        onActivate={(item) => {
           setSelected(item);
           setLocked(item.locked ?? false);
           setHasSelectedPack(true);
           resetOpeningState();
+          void loadPossibleCards(item.tierKey);
         }}
         className="mb-6"
       />

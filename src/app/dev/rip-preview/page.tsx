@@ -1,14 +1,27 @@
 "use client";
 
 import { useState } from "react";
-import { PackCarousel, type PackCarouselItem } from "@/components/pack-art/PackCarousel";
+import { PackShelf, type PackShelfItem } from "@/components/pack-art/PackShelf";
 import { OpeningStage, type OpeningPhase } from "@/components/pack-art/OpeningStage";
 import { CoinFlip } from "@/components/pack-art/CoinFlip";
 
-const DEMO_TIERS: PackCarouselItem[] = [
+const DEMO_TIERS: PackShelfItem[] = [
+  { tierKey: "mythic", tierName: "Mythic", price: 250_000_000 },
   { tierKey: "spark", tierName: "Spark", price: 500_000 },
   { tierKey: "obsidian", tierName: "Obsidian", price: 100_000_000 },
-  { tierKey: "mythic", tierName: "Mythic", price: 250_000_000 },
+  { tierKey: "genesis", tierName: "Genesis", price: 10_000_000_000, locked: true },
+];
+
+// Real Pokemon TCG API images (same ones resolveCardImage would actually resolve in
+// production) — this preview never touches the DB, so these stand in for a tier's real
+// pool preview from /api/packs/[tierKey]/spin-preview.
+const DEMO_POSSIBLE_CARDS = [
+  { cardName: "Charmander", imageUrl: "https://images.pokemontcg.io/base1/46_hires.png" },
+  { cardName: "Pikachu", imageUrl: "https://images.pokemontcg.io/base1/58_hires.png" },
+  { cardName: "Squirtle", imageUrl: "https://images.pokemontcg.io/base1/63_hires.png" },
+  { cardName: "Blastoise", imageUrl: "https://images.pokemontcg.io/base1/2_hires.png" },
+  { cardName: "Venusaur", imageUrl: "https://images.pokemontcg.io/base1/15_hires.png" },
+  { cardName: "Charizard", imageUrl: "https://images.pokemontcg.io/base1/4_hires.png" },
 ];
 
 /**
@@ -19,7 +32,7 @@ const DEMO_TIERS: PackCarouselItem[] = [
  * real app.
  */
 export default function RipPreviewPage() {
-  const [selected, setSelected] = useState<PackCarouselItem>(DEMO_TIERS[0]);
+  const [selected, setSelected] = useState<PackShelfItem>(DEMO_TIERS[0]);
   const [hasSelectedPack, setHasSelectedPack] = useState(false);
   const [phase, setPhase] = useState<OpeningPhase>("idle");
   const [showCoinFlip, setShowCoinFlip] = useState(false);
@@ -60,7 +73,15 @@ export default function RipPreviewPage() {
             price={selected.price}
             phase={phase}
             cardName="Charizard (demo)"
-            resolvedImage={null}
+            resolvedImage={{
+              imageUrl: "https://images.pokemontcg.io/base1/4_hires.png",
+              imageType: "CATALOG_RENDER",
+              provider: "pokemon_tcg",
+              attribution: "Card image via the Pokémon TCG API (pokemontcg.io).",
+              isExactItem: false,
+              fallbackUsed: false,
+            }}
+            possibleCards={DEMO_POSSIBLE_CARDS}
             onRipped={() => setPhase("revealing")}
             onSpinComplete={handleRevealSettled}
           />
@@ -94,15 +115,10 @@ export default function RipPreviewPage() {
         </p>
       )}
 
-      <PackCarousel
+      <PackShelf
         items={DEMO_TIERS}
-        initialIndex={DEMO_TIERS.findIndex((t) => t.tierKey === selected.tierKey)}
+        selectedTierKey={hasSelectedPack ? selected.tierKey : undefined}
         onSelect={(item) => {
-          setSelected(item);
-          setHasSelectedPack(false);
-          reset();
-        }}
-        onActivate={(item) => {
           setSelected(item);
           setHasSelectedPack(true);
           reset();

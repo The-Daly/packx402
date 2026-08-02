@@ -200,4 +200,17 @@ export async function resolveCardImage(
   };
 }
 
+/**
+ * Batch variant of resolveCardImage — used to pre-resolve images for every entry in a
+ * pack's pool (not just the winner) so the spin animation (CardRevealWheel) can cycle
+ * through what the pack could actually contain, instead of generic card-back
+ * placeholders. Resolves all entries concurrently; a failure on one entry never affects
+ * the others (each independently falls back to PLACEHOLDER via resolveCardImage).
+ */
+export async function resolveCardImages(
+  inputs: CardImageResolverInput[],
+): Promise<ResolvedCardImage[]> {
+  return Promise.all(inputs.map((input) => resolveCardImage(input)));
+}
+
 export { isAllowedImageUrl };

@@ -6,10 +6,20 @@ import { CardBack } from "./CardBack";
 import { CardOverlaySlot } from "./CardOverlaySlot";
 import type { ResolvedCardImage } from "@/shared/card-image";
 
+export interface SpinPossibleCard {
+  cardName: string;
+  imageUrl: string;
+}
+
 export interface CardRevealWheelProps {
   cardName: string;
   resolvedImage: ResolvedCardImage | null;
-  /** How many card-back placeholders spin past before landing on the winner. */
+  /** Real cards this pack's pool could actually contain, cycled through as the non-winner
+   * spin slots — shows genuine possible pulls instead of a blank card back. Falls back to
+   * generic card backs when empty (e.g. no images resolved yet). Never includes or implies
+   * which one is the actual winner — that's `resolvedImage`/`cardName` alone. */
+  possibleCards?: SpinPossibleCard[];
+  /** How many slots spin past before landing on the winner. */
   spinCount?: number;
   onSpinComplete?: () => void;
   className?: string;
@@ -28,6 +38,7 @@ const SLOT_WIDTH = 200;
 export function CardRevealWheel({
   cardName,
   resolvedImage,
+  possibleCards = [],
   spinCount = 10,
   onSpinComplete,
   className,
@@ -93,6 +104,18 @@ export function CardRevealWheel({
                     )}
                   </motion.div>
                 </div>
+              ) : possibleCards.length > 0 ? (
+                <CardOverlaySlot
+                  cardName={possibleCards[i % possibleCards.length].cardName}
+                  resolved={{
+                    imageUrl: possibleCards[i % possibleCards.length].imageUrl,
+                    imageType: "CATALOG_RENDER",
+                    provider: "pokemon_tcg",
+                    attribution: null,
+                    isExactItem: false,
+                    fallbackUsed: false,
+                  }}
+                />
               ) : (
                 <CardBack />
               )}
