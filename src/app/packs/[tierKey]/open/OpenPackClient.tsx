@@ -13,6 +13,9 @@ export interface OpenPackClientProps {
   tiers: PackCarouselItem[];
   initialTierKey: PackTierKey;
   initialLocked: boolean;
+  /** Rendered when a 401 requires sign-in — a Server Component (GoogleSignInButton uses a
+   * server action), so it's passed down from the server page rather than imported here. */
+  signInSlot?: React.ReactNode;
 }
 
 interface PendingPayment {
@@ -33,11 +36,17 @@ const BONUS_FLIP_CHANCE = 0.15;
  * once a wallet flow supplies a real X-PAYMENT header, the card-reveal wheel spins down to
  * the actual fairness-selected card. Never fabricates a card outcome client-side.
  */
-export function OpenPackClient({ tiers, initialTierKey, initialLocked }: OpenPackClientProps) {
+export function OpenPackClient({
+  tiers,
+  initialTierKey,
+  initialLocked,
+  signInSlot,
+}: OpenPackClientProps) {
   const [selected, setSelected] = useState<PackCarouselItem>(
     tiers.find((t) => t.tierKey === initialTierKey) ?? tiers[0],
   );
   const [locked, setLocked] = useState(initialLocked);
+  const [hasSelectedPack, setHasSelectedPack] = useState(false);
   const [phase, setPhase] = useState<OpeningPhase>("idle");
   const [pendingPayment, setPendingPayment] = useState<PendingPayment | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -98,35 +107,25 @@ export function OpenPackClient({ tiers, initialTierKey, initialLocked }: OpenPac
     }
   }
 
+  function resetOpeningState() {
+    setPendingPayment(null);
+    setError(null);
+    setShowCoinFlip(false);
+    setPhase("idle");
+    setWheelKey((k) => k + 1);
+  }
+
   return (
     <div>
       <h1 className="mb-2 text-center text-2xl font-semibold">Open a pack</h1>
-      <p className="text-muted mb-8 text-center text-sm">
-        Spin to a pack, then drag up to rip it open.
-      </p>
 
-      <PackCarousel
-        items={tiers}
-        initialIndex={Math.max(
-          0,
-          tiers.findIndex((t) => t.tierKey === selected.tierKey),
-        )}
-        onSelect={(item) => {
-          setSelected(item);
-          setLocked(item.locked ?? false);
-          setPendingPayment(null);
-          setPhase("idle");
-        }}
-        className="mb-10"
-      />
+      {hasSelectedPack && !locked ? (
+        <>
+          <p className="text-muted mb-6 text-center text-sm">
+            Drag across the top to rip {selected.tierName} open.
+          </p>
 
-      <div className="mx-auto max-w-xs">
-        {locked ? (
-          <div className="border-border-subtle bg-surface text-muted rounded-md border p-4 text-center text-sm">
-            {selected.tierName} is locked during beta and cannot be opened.
-          </div>
-        ) : (
-          <>
+          <div className="mx-auto max-w-xs">
             <OpeningStage
               key={wheelKey}
               tierKey={selected.tierKey}
@@ -139,11 +138,14 @@ export function OpenPackClient({ tiers, initialTierKey, initialLocked }: OpenPac
               onSpinComplete={handleRevealSettled}
             />
 
-            {showCoinFlip && (
-              <CoinFlip onResult={handleCoinFlipResult} className="mt-4" />
-            )}
+            {showCoinFlip && <CoinFlip onResult={handleCoinFlipResult} className="mt-4" />}
 
-            {error && <p className="mt-4 text-center text-sm text-red-400">{error}</p>}
+            {error && (
+              <div className="mt-4 text-center">
+                <p className="text-sm text-red-400">{error}</p>
+                {error.startsWith("Sign in") && signInSlot}
+              </div>
+            )}
 
             {pendingPayment && (
               <div className="border-border-subtle bg-surface mt-6 rounded-md border p-4 text-sm">
@@ -159,11 +161,53 @@ export function OpenPackClient({ tiers, initialTierKey, initialLocked }: OpenPac
                 </p>
               </div>
             )}
-          </>
-        )}
-      </div>
 
-      <p className="text-muted mt-8 text-center text-xs">
+            <button
+              type="button"
+              onClick={() => {
+                setHasSelectedPack(false);
+                resetOpeningState();
+              }}
+              className="border-border-subtle text-muted hover:border-accent/50 mt-6 w-full rounded-md border px-4 py-2 text-xs"
+            >
+              Choose a different pack
+            </button>
+          </div>
+        </>
+      ) : (
+        <p className="text-muted mb-6 text-center text-sm">
+          Spin to a pack below, then tap it to select it.
+        </p>
+      )}
+
+      {hasSelectedPack && locked && (
+        <div className="border-border-subtle bg-surface text-muted mx-auto mb-8 max-w-xs rounded-md border p-4 text-center text-sm">
+          {selected.tierName} is locked during beta and cannot be opened.
+        </div>
+      )}
+
+      <PackCarousel
+        items={tiers}
+        initialIndex={Math.max(
+          0,
+          tiers.findIndex((t) => t.tierKey === selected.tierKey),
+        )}
+        onSelect={(item) => {
+          setSelected(item);
+          setLocked(item.locked ?? false);
+          setHasSelectedPack(false);
+          resetOpeningState();
+        }}
+        onActivate={(item) => {
+          setSelected(item);
+          setLocked(item.locked ?? false);
+          setHasSelectedPack(true);
+          resetOpeningState();
+        }}
+        className="mb-6"
+      />
+
+      <p className="text-muted mt-2 text-center text-xs">
         <Link href={`/packs/${selected.tierKey}`} className="text-accent hover:text-accent-strong">
           View pack details &amp; odds
         </Link>

@@ -84,17 +84,66 @@ async function resolveCardTraderCatalog(): Promise<ProviderResult | null> {
   return null; // no live CardTrader catalog endpoint wired up yet — see docs/DECISIONS.md
 }
 
+const CATALOG_FETCH_TIMEOUT_MS = 5000;
+
+async function fetchWithTimeout(url: string): Promise<Response | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), CATALOG_FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) return null;
+    return res;
+  } catch {
+    return null; // network error, timeout, or abort — treated as "this provider found nothing"
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function resolvePokemonTcgApi(input: CardImageResolverInput): Promise<ProviderResult | null> {
+  const query = encodeURIComponent(`name:"${input.cardName}"`);
+  const res = await fetchWithTimeout(`https://api.pokemontcg.io/v2/cards?q=${query}&pageSize=1`);
+  if (!res) return null;
+  const body = await res.json().catch(() => null);
+  const imageUrl: string | undefined = body?.data?.[0]?.images?.large ?? body?.data?.[0]?.images?.small;
+  if (!imageUrl) return null;
+  return {
+    imageUrl,
+    imageType: "CATALOG_RENDER",
+    provider: "pokemon_tcg",
+    attribution: "Card image via the Pokémon TCG API (pokemontcg.io).",
+  };
+}
+
+async function resolveYgoprodeckApi(input: CardImageResolverInput): Promise<ProviderResult | null> {
+  const query = encodeURIComponent(input.cardName);
+  const res = await fetchWithTimeout(`https://db.ygoprodeck.com/api/v7/cardinfo.php?name=${query}`);
+  if (!res) return null;
+  const body = await res.json().catch(() => null);
+  const imageUrl: string | undefined = body?.data?.[0]?.card_images?.[0]?.image_url;
+  if (!imageUrl) return null;
+  return {
+    imageUrl,
+    imageType: "CATALOG_RENDER",
+    provider: "ygoprodeck",
+    attribution: "Card image via YGOPRODeck (ygoprodeck.com).",
+  };
+}
+
 /**
  * Provider 4: the public Pokemon TCG API (pokemontcg.io) or YGOPRODeck API, keyed by card
- * game. Free, keyless, public catalog APIs — still CATALOG_RENDER, still requires the
- * domain allowlist check on whatever URL comes back before it's ever rendered.
- *
- * Mock mode: this environment has no outbound network access for live fetches, so this
- * also returns null. A live deployment can call the real endpoint here; the allowlist
- * check in `isAllowedImageUrl()` already guards the result regardless.
+ * game. Free, keyless, public catalog APIs — still CATALOG_RENDER (a catalog stand-in,
+ * not a photo of the specific physical card being shipped), still requires the domain
+ * allowlist check on whatever URL comes back before it's ever rendered. Any network
+ * failure, timeout, or unrecognized response shape resolves to null here — the caller
+ * falls through to the PLACEHOLDER fallback rather than throwing.
  */
-async function resolvePublicCatalogApi(): Promise<ProviderResult | null> {
-  return null; // no outbound network fetch performed in this environment
+async function resolvePublicCatalogApi(
+  input: CardImageResolverInput,
+): Promise<ProviderResult | null> {
+  if (input.cardGame === "pokemon") return resolvePokemonTcgApi(input);
+  if (input.cardGame === "yugioh") return resolveYgoprodeckApi(input);
+  return null;
 }
 
 /**

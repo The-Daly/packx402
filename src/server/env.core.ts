@@ -25,6 +25,13 @@ const envSchema = z.object({
     .string()
     .regex(/^[0-9a-f]{64}$/i, "FIELD_ENCRYPTION_KEY must be a 32-byte hex string"),
 
+  // Google is the only non-wallet sign-in method — see docs/GOOGLE_OAUTH_SETUP.md.
+  // Optional here (rather than required) so typecheck/lint/test/build all still pass
+  // without real Google credentials configured in this environment; NextAuth itself
+  // will fail at runtime if these are empty and Google sign-in is actually attempted.
+  GOOGLE_CLIENT_ID: z.string().default(""),
+  GOOGLE_CLIENT_SECRET: z.string().default(""),
+
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   REDIS_URL: z.string().min(1, "REDIS_URL is required"),
 

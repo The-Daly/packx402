@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { isAllowedImageUrl, resolveCardImage, type CardImageResolverInput } from "./resolver";
 
 function baseInput(overrides: Partial<CardImageResolverInput> = {}): CardImageResolverInput {
@@ -14,7 +14,25 @@ function baseInput(overrides: Partial<CardImageResolverInput> = {}): CardImageRe
   };
 }
 
+function mockFetchOk(body: unknown) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({ ok: true, json: async () => body }),
+  );
+}
+
+function mockFetchFails() {
+  vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network unreachable")));
+}
+
 describe("resolveCardImage", () => {
+  beforeEach(() => {
+    mockFetchFails(); // default: no live network in these tests unless a test opts in
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("falls back to the PackX402 card back when no provider resolves", async () => {
     const result = await resolveCardImage(baseInput());
     expect(result.fallbackUsed).toBe(true);
@@ -40,6 +58,45 @@ describe("resolveCardImage", () => {
   it("still falls back when a certification number is present (no live PSA credential)", async () => {
     const result = await resolveCardImage(baseInput({ certificationNumber: "12345678" }));
     expect(result.fallbackUsed).toBe(true);
+  });
+
+  it("resolves a real Pokemon TCG API catalog image when the API returns one", async () => {
+    mockFetchOk({
+      data: [{ images: { large: "https://images.pokemontcg.io/base1/4_hires.png" } }],
+    });
+    const result = await resolveCardImage(baseInput());
+    expect(result.fallbackUsed).toBe(false);
+    expect(result.imageType).toBe("CATALOG_RENDER");
+    expect(result.provider).toBe("pokemon_tcg");
+    expect(result.imageUrl).toBe("https://images.pokemontcg.io/base1/4_hires.png");
+    expect(result.isExactItem).toBe(false); // catalog render, not the exact physical item
+  });
+
+  it("resolves a real YGOPRODeck catalog image for yugioh cards", async () => {
+    mockFetchOk({
+      data: [{ card_images: [{ image_url: "https://images.ygoprodeck.com/images/cards/1.jpg" }] }],
+    });
+    const result = await resolveCardImage(baseInput({ cardGame: "yugioh", cardName: "Dark Magician" }));
+    expect(result.fallbackUsed).toBe(false);
+    expect(result.provider).toBe("ygoprodeck");
+    expect(result.imageUrl).toBe("https://images.ygoprodeck.com/images/cards/1.jpg");
+  });
+
+  it("falls back when the catalog API returns an image on a non-allowlisted host", async () => {
+    mockFetchOk({ data: [{ images: { large: "https://evil.example.com/fake.png" } }] });
+    const result = await resolveCardImage(baseInput());
+    expect(result.fallbackUsed).toBe(true);
+  });
+
+  it("falls back when the catalog API returns no matching card", async () => {
+    mockFetchOk({ data: [] });
+    const result = await resolveCardImage(baseInput());
+    expect(result.fallbackUsed).toBe(true);
+  });
+
+  it("falls back on a catalog API network error rather than throwing", async () => {
+    mockFetchFails();
+    await expect(resolveCardImage(baseInput())).resolves.toMatchObject({ fallbackUsed: true });
   });
 });
 

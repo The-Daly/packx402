@@ -8,7 +8,7 @@ const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 export interface CreateSessionParams {
   userId: string;
-  authMethod: "email" | "wallet" | "passkey";
+  authMethod: "email" | "wallet" | "passkey" | "google";
   userAgent?: string;
   ipHash?: string;
 }
@@ -40,7 +40,7 @@ export async function createSession(params: CreateSessionParams): Promise<{
 export interface ValidatedSession {
   sessionId: string;
   userId: string;
-  authMethod: "email" | "wallet" | "passkey";
+  authMethod: "email" | "wallet" | "passkey" | "google";
 }
 
 /**

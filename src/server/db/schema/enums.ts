@@ -4,7 +4,7 @@ export const chainEnum = pgEnum("chain", ["algorand", "solana", "evm"]);
 
 export const networkModeEnum = pgEnum("network_mode", ["testnet", "mainnet"]);
 
-export const authMethodEnum = pgEnum("auth_method", ["email", "wallet", "passkey"]);
+export const authMethodEnum = pgEnum("auth_method", ["email", "wallet", "passkey", "google"]);
 
 export const sessionRevokedReasonEnum = pgEnum("session_revoked_reason", [
   "user_revoked",

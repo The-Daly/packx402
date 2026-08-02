@@ -1,6 +1,7 @@
 # PackX402 — Project Status
 
-Last updated: 2026-08-01 (beta scaffold + PackArt visual system + auth API routes).
+Last updated: 2026-08-01 (beta scaffold + PackArt visual system + opening theater +
+Google-only OAuth).
 
 This document is the single source of truth for what is actually implemented, what is
 scaffolded but unverified, and what has not been started. Do not trust marketing language
@@ -64,6 +65,25 @@ production use.
 - **Production build**: `npm run build` succeeds (Next.js 16, Turbopack, strict
   TypeScript). All pages and API routes compile and are correctly typed against the live
   Drizzle schema.
+- **Account creation/login model**: PackX402 has exactly two ways into an account —
+  **Google sign-in** (Auth.js/NextAuth v5, `src/server/auth/google-oauth.ts`, mounted at
+  `/api/oauth/[...nextauth]`) and **direct wallet signature**
+  (`completeWalletAuth` in `src/server/auth/auth-service.ts`, unchanged). The previous
+  passwordless-email signup/login has been **removed entirely** — the routes
+  (`/api/auth/signup`, `/api/auth/login/*`, `/api/auth/verify-email`) and their
+  auth-service functions no longer exist. See `docs/GOOGLE_OAUTH_SETUP.md` for the exact
+  Google Cloud Console steps and required env vars (`GOOGLE_CLIENT_ID`/
+  `GOOGLE_CLIENT_SECRET`) — no real Google credentials were available in this
+  environment, so the OAuth handshake is implemented against Auth.js's documented Google
+  provider but unverified against a real Google account.
+- **Eligibility gate enforced at the point of purchase**: neither Google nor wallet
+  sign-in collects DOB/location at account-creation time (Google's basic profile scope
+  has no birthdate; wallet-first never has). Previously this meant NO eligibility check
+  happened anywhere for wallet accounts — a real gap. `createPackOffer()` in
+  `offer-service.ts` now rejects any offer for a user with no passing eligibility record
+  (`error: "eligibility_required"`), and `POST /api/auth/oauth/complete-eligibility`
+  (tested indirectly via evaluateEligibility's existing 10 unit tests) is what a client
+  calls to satisfy it. There is still no UI page for this — see next steps.
 
 ## What's implemented but unverified against live infrastructure (🟡)
 
@@ -134,12 +154,16 @@ run db:migrate && npm run db:seed` to verify.
   No RBAC enforcement code or UI.
 - **CardImageResolver** (`src/server/card-images/resolver.ts`): implements the documented
   priority chain (supplier photo → PSA graded scan → CardTrader catalog → public catalog
-  APIs → PackX402 fallback) with a domain-allowlist/SSRF guard on any resolved URL. Every
-  provider except the final fallback returns `null` in this environment — none of
-  CardTrader photo access, PSA cert lookup, or outbound network fetches are available
-  here — so it currently always resolves to the generic card-back PLACEHOLDER. The chain,
-  types, and guard are real and tested (`resolver.test.ts`); only the live provider calls
-  are unimplemented stubs, consistent with this repo's mock-default pattern elsewhere.
+  APIs → PackX402 fallback) with a domain-allowlist/SSRF guard on any resolved URL.
+  Providers 1–3 (CardTrader photo, PSA cert lookup, CardTrader catalog) still return
+  `null` — no credential available for any of them. **Provider 4 makes real live calls**
+  to the public, keyless Pokémon TCG API (pokemontcg.io) and YGOPRODeck API
+  (ygoprodeck.com) — confirmed working from this environment — and resolves an actual
+  CATALOG_RENDER card image by name for both games. Only falls back to the generic
+  card-back PLACEHOLDER when a card name has no match, the API is unreachable, or the
+  returned URL isn't on the allowlist. Tested with mocked `fetch` for determinism
+  (`resolver.test.ts`); the live network path itself was manually verified against both
+  real APIs but is not covered by an automated live-network test.
 - **Pack artwork**: real Higgsfield-generated cartoon-style art (cel-shaded, "PackX402"
   wordmark, transparent-background cutouts) installed for all 10 unlocked tiers at
   `public/packs/*.png` — see `docs/HIGGSFIELD_PROMPTS.md`. Crown/Vault/Grail/Genesis
@@ -157,20 +181,28 @@ run db:migrate && npm run db:seed` to verify.
 
 ## Immediate next steps (in priority order)
 
-1. Build a real wallet-connect flow (Pera/Defly for Algorand, Phantom for Solana/EVM) —
-   this is now the single blocker keeping the opening theater from completing a real
-   purchase end to end; everything past payment (settlement, fairness reveal, card image
-   resolution, reveal animation) is already wired and ready to receive it.
-2. `docker compose up -d && npm run db:migrate && npm run db:seed`, then `npm run dev` and
-   manually click through the marketplace/pack-detail/opening-theater pages to catch
-   anything a live DB surfaces that type-checking couldn't.
-3. Build the supplier-purchase worker process (a long-running consumer of the
+1. Install Docker Desktop (this dev machine doesn't have it) and run
+   `docker compose up -d && npm run db:migrate && npm run db:seed`, then `npm run dev` —
+   this is the single blocker keeping the pack-detail and opening-theater pages from
+   rendering at all right now (they 404 without a live Postgres). A no-DB animation
+   preview exists at `/dev/rip-preview` in the meantime (see below).
+2. Create a real Google OAuth client (see `docs/GOOGLE_OAUTH_SETUP.md`) and set
+   `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` in `.env.local` to actually test Google
+   sign-in end to end.
+3. Build a UI page for `POST /api/auth/oauth/complete-eligibility` (DOB/country/terms) —
+   the API is implemented and enforced at purchase time, but there's no page collecting
+   it yet.
+4. Build a real wallet-connect flow (Pera/Defly for Algorand, Phantom for Solana/EVM) —
+   the other blocker keeping the opening theater from completing a real purchase end to
+   end; everything past payment (settlement, fairness reveal, card image resolution,
+   reveal animation) is already wired and ready to receive it.
+5. Build the supplier-purchase worker process (a long-running consumer of the
    `supplier_purchases` queue) — currently only enqueues, never processes.
-4. Wire real rolling-spend aggregation into `offer-service.ts`'s limit check.
-5. Wire a live CardTrader photo/catalog credential (or PSA/public-catalog credential) into
+6. Wire real rolling-spend aggregation into `offer-service.ts`'s limit check.
+7. Wire a live CardTrader photo/catalog credential (or PSA/public-catalog credential) into
    `src/server/card-images/resolver.ts`'s provider stubs so real card images resolve
    instead of always falling back to the placeholder.
-6. Obtain CardTrader and GoPlausible sandbox credentials and run an actual integration
+8. Obtain CardTrader and GoPlausible sandbox credentials and run an actual integration
    test pass before ever setting `CARDTRADER_MODE=live` or
    `X402_FACILITATOR_MODE=live` outside of TestNet dry runs.
 

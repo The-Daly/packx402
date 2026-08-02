@@ -1,6 +1,7 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import {
+  eligibilityRecords,
   fairnessProofs,
   packOffers,
   packTiers,
@@ -97,6 +98,30 @@ export async function createPackOffer(params: {
     throw new OfferCreationError(
       "tier_not_purchasable",
       availability.reason ?? "tier not purchasable",
+    );
+  }
+
+  // Neither wallet-first nor Google sign-in collects DOB/location at account-creation time
+  // (see the KNOWN GAP notes in auth-service.ts) — so the eligibility gate that
+  // signUpWithEmail used to enforce up front is enforced HERE instead, at the one point
+  // every purchase path funnels through, regardless of how the account was created.
+  const [latestEligibility] = await db
+    .select({
+      locationAllowed: eligibilityRecords.locationAllowed,
+      ageAcknowledged18Plus: eligibilityRecords.ageAcknowledged18Plus,
+    })
+    .from(eligibilityRecords)
+    .where(eq(eligibilityRecords.userId, params.userId))
+    .orderBy(desc(eligibilityRecords.acknowledgedAt))
+    .limit(1);
+  if (
+    !latestEligibility ||
+    !latestEligibility.locationAllowed ||
+    !latestEligibility.ageAcknowledged18Plus
+  ) {
+    throw new OfferCreationError(
+      "eligibility_required",
+      "Age and location eligibility must be confirmed before opening a pack",
     );
   }
 

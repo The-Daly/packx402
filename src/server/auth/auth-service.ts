@@ -3,7 +3,7 @@ import { db } from "@/server/db/client";
 import {
   authNonces,
   eligibilityRecords,
-  emailVerificationTokens,
+  oauthIdentities,
   userProfiles,
   users,
   walletIdentities,
@@ -15,8 +15,7 @@ import {
   CURRENT_RESPONSIBLE_PURCHASING_VERSION,
   CURRENT_TERMS_VERSION,
 } from "@/server/config/policy-versions";
-import { generateOpaqueToken, hashToken } from "./tokens";
-import { sendEmail } from "@/server/email/send";
+import { generateOpaqueToken } from "./tokens";
 import { createSession, type CreateSessionParams } from "./session";
 import {
   buildWalletSignatureMessage,
@@ -25,7 +24,6 @@ import {
 } from "./wallet-message";
 import { verifyWalletSignature } from "./wallet-verify";
 
-const EMAIL_TOKEN_TTL_MS = 30 * 60 * 1000; // 30 minutes
 const NONCE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 export class AuthError extends Error {
@@ -37,35 +35,97 @@ export class AuthError extends Error {
   }
 }
 
-export interface SignUpWithEmailParams {
+/**
+ * Finds the PackX402 user linked to this Google account (by provider + Google's stable
+ * `sub` claim, never by email alone — an email can be reused/changed), or creates a new
+ * account on first sign-in. Mirrors the wallet-first-signup pattern in
+ * `completeWalletAuth()` below, including the same known gap: this does not yet collect
+ * DOB/location eligibility (Google's basic profile scope has no birthdate), so a new
+ * account is created eligibility-incomplete and MUST complete `submitOAuthEligibility`
+ * below before any pack offer can be created — see the check in `createPackOffer()`.
+ */
+export async function findOrCreateGoogleUser(params: {
+  providerAccountId: string;
   email: string;
-  username: string;
   displayName: string;
+}): Promise<{ userId: string; isNewAccount: boolean }> {
+  const [existingIdentity] = await db
+    .select({ userId: oauthIdentities.userId })
+    .from(oauthIdentities)
+    .where(
+      and(
+        eq(oauthIdentities.provider, "google"),
+        eq(oauthIdentities.providerAccountId, params.providerAccountId),
+      ),
+    )
+    .limit(1);
+
+  if (existingIdentity) {
+    return { userId: existingIdentity.userId, isNewAccount: false };
+  }
+
+  const suffix = generateOpaqueToken(4)
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .slice(0, 6);
+  const [user] = await db
+    .insert(users)
+    .values({
+      email: params.email,
+      username: `collector-${suffix}`,
+      primaryAuthMethod: "google",
+      emailVerifiedAt: new Date(), // Google has already verified this address
+      marketingConsent: false,
+      termsAcceptedVersion: CURRENT_TERMS_VERSION,
+      termsAcceptedAt: new Date(),
+      privacyAcceptedVersion: CURRENT_PRIVACY_VERSION,
+      responsiblePurchasingAcceptedVersion: CURRENT_RESPONSIBLE_PURCHASING_VERSION,
+      officialPackRulesAcceptedVersion: CURRENT_OFFICIAL_PACK_RULES_VERSION,
+      country: "US", // placeholder until submitOAuthEligibility() records the real value
+    })
+    .returning({ id: users.id });
+
+  await db
+    .insert(userProfiles)
+    .values({ userId: user.id, displayName: params.displayName || `Collector ${suffix}` });
+  await db.insert(oauthIdentities).values({
+    userId: user.id,
+    provider: "google",
+    providerAccountId: params.providerAccountId,
+    email: params.email,
+    verifiedAt: new Date(),
+  });
+
+  return { userId: user.id, isNewAccount: true };
+}
+
+/**
+ * Issues our own app session for an already-resolved Google-authenticated user. Called
+ * right after `findOrCreateGoogleUser()` from the NextAuth signIn callback — NextAuth
+ * itself only handles the OAuth2 handshake with Google; this is what the rest of the app
+ * (requireUserId, session listing/revocation, responsible-purchasing limits) actually
+ * checks, exactly like a wallet-authenticated session.
+ */
+export async function createSessionForGoogleUser(
+  userId: string,
+  sessionParams: Omit<CreateSessionParams, "userId" | "authMethod">,
+): Promise<{ token: string; expiresAt: Date }> {
+  return createSession({ userId, authMethod: "google", ...sessionParams });
+}
+
+/**
+ * Completes the DOB/location eligibility gate for an account created via Google or
+ * wallet sign-in (neither collects this at signup time). A pack offer cannot be created
+ * for a user until this has been called at least once and passed — see the check added
+ * to `createPackOffer()` in offer-service.ts.
+ */
+export async function submitOAuthEligibility(params: {
+  userId: string;
   dateOfBirth: string;
   ageAcknowledged18Plus: boolean;
   country: string;
   stateOrProvince?: string;
-  marketingConsent: boolean;
-  termsAccepted: boolean;
-  referralCode?: string;
   sessionCorrelationId: string;
-}
-
-/**
- * Passwordless email signup: eligibility is enforced server-side (never trust a client
- * "I am 18+" flag alone), then a verification token is emailed. The account exists but
- * `emailVerifiedAt` is null and no session is issued until `verifyEmailToken` succeeds.
- */
-export async function signUpWithEmail(
-  params: SignUpWithEmailParams,
-): Promise<{ userId: string; requiresEmailVerification: true }> {
-  if (!params.termsAccepted) {
-    throw new AuthError(
-      "terms_not_accepted",
-      "Terms, Privacy, Responsible Purchasing, and Pack Rules must be accepted",
-    );
-  }
-
+}): Promise<{ eligible: boolean; reasons: string[] }> {
   const eligibility = evaluateEligibility({
     dateOfBirth: params.dateOfBirth,
     ageAcknowledged18Plus: params.ageAcknowledged18Plus,
@@ -75,6 +135,7 @@ export async function signUpWithEmail(
   });
 
   await db.insert(eligibilityRecords).values({
+    userId: params.userId,
     sessionCorrelationId: params.sessionCorrelationId,
     dateOfBirth: params.dateOfBirth,
     ageAcknowledged18Plus: params.ageAcknowledged18Plus,
@@ -85,130 +146,11 @@ export async function signUpWithEmail(
     policyVersion: eligibility.policyVersion,
   });
 
-  if (!eligibility.eligible) {
-    throw new AuthError("not_eligible", `Not eligible: ${eligibility.reasons.join(", ")}`);
+  if (params.country) {
+    await db.update(users).set({ country: params.country }).where(eq(users.id, params.userId));
   }
 
-  const [existingEmail] = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.email, params.email))
-    .limit(1);
-  if (existingEmail) {
-    throw new AuthError("email_taken", "An account with this email already exists");
-  }
-  const [existingUsername] = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.username, params.username))
-    .limit(1);
-  if (existingUsername) {
-    throw new AuthError("username_taken", "That username is already taken");
-  }
-
-  const [user] = await db
-    .insert(users)
-    .values({
-      email: params.email,
-      username: params.username,
-      primaryAuthMethod: "email",
-      marketingConsent: params.marketingConsent,
-      marketingConsentAt: params.marketingConsent ? new Date() : undefined,
-      termsAcceptedVersion: CURRENT_TERMS_VERSION,
-      termsAcceptedAt: new Date(),
-      privacyAcceptedVersion: CURRENT_PRIVACY_VERSION,
-      responsiblePurchasingAcceptedVersion: CURRENT_RESPONSIBLE_PURCHASING_VERSION,
-      officialPackRulesAcceptedVersion: CURRENT_OFFICIAL_PACK_RULES_VERSION,
-      country: params.country,
-      stateOrProvince: params.stateOrProvince,
-    })
-    .returning({ id: users.id });
-
-  await db.insert(userProfiles).values({ userId: user.id, displayName: params.displayName });
-
-  await issueEmailToken(user.id, params.email, "verify_email");
-
-  return { userId: user.id, requiresEmailVerification: true };
-}
-
-async function issueEmailToken(
-  userId: string,
-  email: string,
-  purpose: "verify_email" | "login",
-): Promise<void> {
-  const rawToken = generateOpaqueToken();
-  await db.insert(emailVerificationTokens).values({
-    userId,
-    tokenHash: hashToken(rawToken),
-    purpose,
-    expiresAt: new Date(Date.now() + EMAIL_TOKEN_TTL_MS),
-  });
-
-  const verifyUrl = `/api/auth/${purpose === "login" ? "login/verify" : "verify-email"}?token=${rawToken}`;
-  await sendEmail({
-    to: email,
-    subject: purpose === "login" ? "Your PackX402 login link" : "Verify your PackX402 email",
-    text: `Click to continue: ${verifyUrl}\n\nThis link expires in 30 minutes. If you didn't request this, ignore it.`,
-  });
-}
-
-export async function requestLoginEmail(email: string): Promise<void> {
-  const [user] = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.email, email))
-    .limit(1);
-  // Deliberately does not reveal whether the account exists.
-  if (user) {
-    await issueEmailToken(user.id, email, "login");
-  }
-}
-
-async function consumeEmailToken(
-  rawToken: string,
-  purpose: "verify_email" | "login",
-): Promise<{ userId: string }> {
-  const tokenHash = hashToken(rawToken);
-  const [row] = await db
-    .select()
-    .from(emailVerificationTokens)
-    .where(
-      and(
-        eq(emailVerificationTokens.tokenHash, tokenHash),
-        eq(emailVerificationTokens.purpose, purpose),
-      ),
-    )
-    .limit(1);
-
-  if (!row || row.consumedAt || row.expiresAt.getTime() < Date.now()) {
-    throw new AuthError("invalid_token", "This link is invalid or has expired");
-  }
-
-  await db
-    .update(emailVerificationTokens)
-    .set({ consumedAt: new Date() })
-    .where(eq(emailVerificationTokens.id, row.id));
-
-  return { userId: row.userId };
-}
-
-export async function verifyEmailToken(
-  rawToken: string,
-  sessionParams: Omit<CreateSessionParams, "userId" | "authMethod">,
-): Promise<{ token: string; expiresAt: Date; userId: string }> {
-  const { userId } = await consumeEmailToken(rawToken, "verify_email");
-  await db.update(users).set({ emailVerifiedAt: new Date() }).where(eq(users.id, userId));
-  const session = await createSession({ userId, authMethod: "email", ...sessionParams });
-  return { ...session, userId };
-}
-
-export async function completeEmailLogin(
-  rawToken: string,
-  sessionParams: Omit<CreateSessionParams, "userId" | "authMethod">,
-): Promise<{ token: string; expiresAt: Date; userId: string }> {
-  const { userId } = await consumeEmailToken(rawToken, "login");
-  const session = await createSession({ userId, authMethod: "email", ...sessionParams });
-  return { ...session, userId };
+  return { eligible: eligibility.eligible, reasons: eligibility.reasons };
 }
 
 export async function createWalletNonce(params: {
@@ -334,12 +276,12 @@ export async function completeWalletAuth(
     });
     userId = params.linkingUserId;
   } else {
-    // KNOWN GAP: wallet-first signup does not currently collect/check DOB or blocked-location
-    // eligibility before creating the account, unlike signUpWithEmail(). Spec section 6 requires
-    // the eligibility gate before ANY account creation, including wallet-first. Before shipping
-    // wallet-first signup, this branch must collect DOB/country from the client (a modal shown
-    // before the wallet signature request) and call evaluateEligibility()/insert an
-    // eligibility_records row exactly as signUpWithEmail does. Tracked in PROJECT_STATUS.md.
+    // KNOWN GAP: wallet-first signup does not collect DOB/location at account-creation time
+    // (same gap as Google sign-in — see findOrCreateGoogleUser above). The account is created
+    // eligibility-incomplete; `submitOAuthEligibility()` must be called and pass before
+    // createPackOffer() will allow a purchase (enforced in offer-service.ts). A client-side
+    // modal collecting DOB/country before or right after the wallet signature request is the
+    // remaining UI gap — tracked in PROJECT_STATUS.md.
     const suffix = generateOpaqueToken(4)
       .replace(/[^a-zA-Z0-9]/g, "")
       .slice(0, 6);

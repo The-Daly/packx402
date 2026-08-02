@@ -100,6 +100,29 @@ export const walletIdentities = pgTable(
   ],
 );
 
+// One row per linked OAuth identity (currently Google only). Keyed by (provider,
+// providerAccountId) rather than email — a Google account's email can change, but its
+// subject id (`sub`) never does. This is what makes Google sign-in idempotent across
+// logins: the same Google account always resolves to the same PackX402 user.
+export const oauthIdentities = pgTable(
+  "oauth_identities",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(), // "google"
+    providerAccountId: text("provider_account_id").notNull(), // Google's `sub` claim
+    email: text("email").notNull(), // email at time of linking, for display/support only
+    verifiedAt: timestamp("verified_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("oauth_identities_provider_account_unique").on(t.provider, t.providerAccountId),
+    index("oauth_identities_user_id_idx").on(t.userId),
+  ],
+);
+
 // Short-lived single-use nonces for wallet-signature login (section 8/41).
 export const authNonces = pgTable(
   "auth_nonces",
