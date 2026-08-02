@@ -6,6 +6,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { usdcBaseUnitsToDisplayString } from "@/shared/money";
 import { serverEnv } from "@/server/env";
 import { PackArt } from "@/components/pack-art/PackArt";
+import { Pack3DTilt } from "@/components/pack-art/Pack3DTilt";
 import type { PackTierKey } from "@/server/config/pack-tiers";
 
 export const revalidate = 30;
@@ -47,15 +48,17 @@ export default async function PackDetailPage({ params }: { params: Promise<{ tie
     <div className="mx-auto max-w-5xl px-6 py-12">
       <div className="grid gap-10 md:grid-cols-2">
         <div>
-          <PackArt
-            tierKey={tier.key as PackTierKey}
-            tierName={tier.name}
-            price={tier.priceUsdcBaseUnits}
-            locked={isLocked}
-            size="detail"
-            priority
-            featured
-          />
+          <Pack3DTilt>
+            <PackArt
+              tierKey={tier.key as PackTierKey}
+              tierName={tier.name}
+              price={tier.priceUsdcBaseUnits}
+              locked={isLocked}
+              size="detail"
+              priority
+              featured
+            />
+          </Pack3DTilt>
         </div>
         <div>
           <h1 className="text-3xl font-semibold">{tier.name} Pack</h1>
@@ -81,6 +84,8 @@ export default async function PackDetailPage({ params }: { params: Promise<{ tie
             <dd>{pool ? new Date(pool.publishedAt).toLocaleDateString() : "—"}</dd>
             <dt className="text-muted">Estimated delivery</dt>
             <dd>7–14 business days after supplier confirmation</dd>
+            <dt className="text-muted">Max obtainable card value</dt>
+            <dd>${usdcBaseUnitsToDisplayString(tier.procurementPriceCapUsdcBaseUnits)}</dd>
           </dl>
 
           {isLocked ? (
@@ -125,6 +130,7 @@ export default async function PackDetailPage({ params }: { params: Promise<{ tie
                   <th className="px-4 py-3 font-medium">Example card</th>
                   <th className="px-4 py-3 font-medium">Set</th>
                   <th className="px-4 py-3 font-medium">Condition</th>
+                  <th className="px-4 py-3 font-medium">Reference value</th>
                   <th className="px-4 py-3 font-medium">Probability band</th>
                 </tr>
               </thead>
@@ -135,6 +141,11 @@ export default async function PackDetailPage({ params }: { params: Promise<{ tie
                     <td className="text-muted px-4 py-3">{e.setName}</td>
                     <td className="text-muted px-4 py-3 capitalize">
                       {e.minCondition.replaceAll("_", " ")}+
+                    </td>
+                    <td className="px-4 py-3">
+                      {e.referenceValueUsdcBaseUnits != null
+                        ? `$${usdcBaseUnitsToDisplayString(e.referenceValueUsdcBaseUnits)}`
+                        : "—"}
                     </td>
                     <td className="px-4 py-3">{e.probabilityBandLabel}</td>
                   </tr>

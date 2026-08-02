@@ -107,7 +107,7 @@ export function PackCarousel({
   return (
     <div
       className={["relative w-full overflow-hidden", className ?? ""].join(" ")}
-      style={{ height: containerHeight }}
+      style={{ height: containerHeight, perspective: 1400 }}
       role="listbox"
       aria-label="Browse pack tiers"
       tabIndex={0}
@@ -119,7 +119,7 @@ export function PackCarousel({
       <div className="carousel-ambient pointer-events-none absolute inset-0" aria-hidden="true" />
 
       <motion.div
-        className="relative mx-auto h-full max-w-none cursor-grab active:cursor-grabbing"
+        className="relative mx-auto h-full max-w-none cursor-grab touch-pan-y [transform-style:preserve-3d] active:cursor-grabbing"
         style={{ x }}
         drag="x"
         dragElastic={0.08}
@@ -165,16 +165,22 @@ function CarouselSlot({
   const scale = useTransform(units, (u) => Math.max(0.62, 1 - Math.abs(u) * 0.16));
   const opacity = useTransform(units, (u) => Math.max(0, 1 - Math.abs(u) * 0.32));
   const zIndex = useTransform(units, (u) => Math.round(10 - Math.abs(u)));
+  // 3D-drum illusion: packs off-center rotate away and recede in depth, like they're
+  // mounted on a rotating cylinder rather than a flat sliding strip.
+  const rotateY = useTransform(units, (u) => Math.max(-42, Math.min(42, u * -16)));
+  const z = useTransform(units, (u) => -Math.min(220, Math.abs(u) * 55));
 
   return (
     <motion.div
       role="option"
       aria-selected={undefined}
       aria-label={`${item.tierName} pack${item.locked ? " (locked)" : ""}`}
-      className="absolute top-1/2 left-1/2 w-[150px]"
+      className="absolute top-1/2 left-1/2 w-[150px] [transform-style:preserve-3d]"
       style={{
         x: wrapped,
         y: "-50%",
+        z,
+        rotateY,
         marginLeft: -75,
         scale,
         opacity,

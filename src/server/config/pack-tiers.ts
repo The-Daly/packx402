@@ -34,6 +34,8 @@ export interface PackTierDefinition {
   estimatedShippingUsdcBaseUnits: number;
   cardGames: string[];
   minDisclosedCondition: string;
+  /** Max reference value a single card in this tier's pool may have (see
+   * MAX_OBTAINABLE_VALUE_MULTIPLIER below) — the ceiling on what's obtainable from the pack. */
   procurementPriceCapUsdcBaseUnits: number;
   availableTestnet: boolean;
   availableAlgorandMainnet: boolean;
@@ -46,6 +48,31 @@ export interface PackTierDefinition {
 
 const USDC_BASE_UNITS_PER_DOLLAR = 1_000_000; // USDC has 6 decimals
 const usd = (dollars: number) => Math.round(dollars * USDC_BASE_UNITS_PER_DOLLAR);
+
+// Max-obtainable-value multiplier per tier: the ceiling on how expensive a single card in
+// a tier's pool can be, expressed as a multiple of the pack's own price. Tapers down as
+// price rises — a cheap pack can hit a big multiple of its price (Spark: $0.50 -> $25 max,
+// 50x) without the platform's per-pull financial exposure scaling linearly with price at
+// the top end (Genesis: $10,000 -> $20,000 max, only 2x). This is a deliberate,
+// user-directed design choice, distinct from (and now replaces) the old flat 1.15x
+// "barely above cost" cap — see PROJECT_STATUS.md and docs/LEGAL_REVIEW_REQUIRED.md for
+// the responsible-purchasing/EV-disclosure implications of this schedule.
+const MAX_OBTAINABLE_VALUE_MULTIPLIER: Record<PackTierKey, number> = {
+  spark: 50,
+  starter: 40,
+  scout: 30,
+  bronze: 25,
+  silver: 20,
+  gold: 15,
+  prism: 12,
+  platinum: 10,
+  obsidian: 8,
+  mythic: 6,
+  crown: 5,
+  vault: 4,
+  grail: 3,
+  genesis: 2,
+};
 
 // Beta default availability:
 // - TestNet / Solana / EVM: Spark through Mythic ($250) — everything the current
@@ -87,7 +114,7 @@ function buildTier(
     estimatedShippingUsdcBaseUnits: usd(4.99),
     cardGames: ["pokemon", "yugioh"],
     minDisclosedCondition: "lightly_played",
-    procurementPriceCapUsdcBaseUnits: usd(priceDollars * 1.15),
+    procurementPriceCapUsdcBaseUnits: usd(priceDollars * MAX_OBTAINABLE_VALUE_MULTIPLIER[key]),
     availableTestnet: TESTNET_CEILING.includes(key),
     availableAlgorandMainnet: MAINNET_CEILING.includes(key),
     availableSolana: TESTNET_CEILING.includes(key),

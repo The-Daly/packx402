@@ -211,6 +211,28 @@ body {
   }
 }
 
+/* ---------------------------------------------------------------------- */
+/* Pack3DTilt idle float — src/components/pack-art/Pack3DTilt.tsx         */
+/* ---------------------------------------------------------------------- */
+
+.pack-3d-idle-float {
+  animation: pack-3d-idle-float 4.5s ease-in-out infinite;
+}
+
+.pack-3d-idle-float:active {
+  animation-play-state: paused;
+}
+
+@keyframes pack-3d-idle-float {
+  0%,
+  100% {
+    transform: translateY(0) rotateZ(-0.6deg);
+  }
+  50% {
+    transform: translateY(-10px) rotateZ(0.6deg);
+  }
+}
+
 .result-effect-column {
   top: 0;
   width: 2px;

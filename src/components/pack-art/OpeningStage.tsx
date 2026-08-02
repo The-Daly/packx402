@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import type { PackTierKey } from "@/server/config/pack-tiers";
 import { PackArt } from "./PackArt";
 import { CardOverlaySlot } from "./CardOverlaySlot";
+import { CardRevealWheel } from "./CardRevealWheel";
+import { RipToOpen } from "./RipToOpen";
 import { ResultEffect, type ResultIntensity } from "./ResultEffect";
 import type { ResolvedCardImage } from "@/shared/card-image";
 
@@ -21,6 +23,10 @@ export interface OpeningStageProps {
   idleVideoSrc?: string;
   openingVideoSrc?: string;
   onSkipReveal?: () => void;
+  /** Fires once the user's drag-to-rip gesture commits (see RipToOpen). */
+  onRipped?: () => void;
+  /** Fires once the card-reveal wheel finishes spinning and lands on the winning card. */
+  onSpinComplete?: () => void;
   className?: string;
 }
 
@@ -56,6 +62,8 @@ export function OpeningStage({
   idleVideoSrc,
   openingVideoSrc,
   onSkipReveal,
+  onRipped,
+  onSpinComplete,
   className,
 }: OpeningStageProps) {
   const prefersReducedMotion = usePrefersReducedMotion();
@@ -63,39 +71,53 @@ export function OpeningStage({
 
   return (
     <div className={["relative mx-auto w-full max-w-xs", className ?? ""].join(" ")}>
-      {effectivePhase === "idle" || effectivePhase === "tearing" ? (
-        <>
-          {idleVideoSrc ? (
-            <video
-              className="aspect-[2/3] w-full rounded-xl object-cover"
-              src={idleVideoSrc}
-              autoPlay
-              loop
-              muted
-              playsInline
-            />
-          ) : (
+      {effectivePhase === "idle" ? (
+        idleVideoSrc ? (
+          <video
+            className="aspect-[2/3] w-full rounded-xl object-cover"
+            src={idleVideoSrc}
+            autoPlay
+            loop
+            muted
+            playsInline
+          />
+        ) : (
+          <RipToOpen onRipped={() => onRipped?.()}>
             <PackArt
               tierKey={tierKey}
               tierName={tierName}
               price={price}
               size="detail"
               priority
-              animationState={effectivePhase === "tearing" ? "opening" : "idle"}
+              animationState="idle"
             />
-          )}
-        </>
+          </RipToOpen>
+        )
+      ) : effectivePhase === "tearing" ? (
+        <PackArt
+          tierKey={tierKey}
+          tierName={tierName}
+          price={price}
+          size="detail"
+          priority
+          animationState="opening"
+        />
+      ) : effectivePhase === "revealing" ? (
+        <div className="relative flex justify-center">
+          <ResultEffect intensity={resultIntensity} videoSrc={openingVideoSrc} active />
+          <CardRevealWheel
+            cardName={cardName ?? "Your card"}
+            resolvedImage={resolvedImage ?? null}
+            onSpinComplete={() => onSpinComplete?.()}
+            className="relative z-10"
+          />
+        </div>
       ) : (
         <div className="relative">
-          <ResultEffect
-            intensity={resultIntensity}
-            videoSrc={openingVideoSrc}
-            active={effectivePhase === "revealing" || effectivePhase === "resolved"}
-          />
+          <ResultEffect intensity={resultIntensity} videoSrc={openingVideoSrc} active />
           <CardOverlaySlot
             cardName={cardName ?? "Your card"}
-            resolved={effectivePhase === "resolved" ? resolvedImage : null}
-            loading={effectivePhase === "revealing" && !resolvedImage}
+            resolved={resolvedImage}
             className="relative z-10"
           />
         </div>

@@ -21,7 +21,7 @@ elsewhere in the repo over this file — if something here says "not built," it 
 This repository was built in a sandboxed environment with **no Docker, no local
 PostgreSQL, and no live third-party credentials** (CardTrader, GoPlausible/x402
 facilitator). Everything that could be verified without those — TypeScript strict
-typechecking against the full Drizzle schema, the production `next build`, and 77 Vitest
+typechecking against the full Drizzle schema, the production `next build`, and 86 Vitest
 unit/integration tests including real generated-keypair signature verification for
 Algorand/Solana/EVM — passes. Anything that requires a live database or live credentials
 is marked 🟡 and needs to be verified by a human with `docker compose up -d` before
@@ -103,17 +103,28 @@ run db:migrate && npm run db:seed` to verify.
 
 ## What's scaffolded (schema only) or not started (⬜)
 
-- **UI pages built**: landing page, pack marketplace, pack detail, provably-fair verifier
-  (with a real working `/api/fairness/verify` endpoint), odds library + JSON download.
-- **UI pages NOT built**: signup/login forms, wallet-center UI, purchase-confirmation
-  screen, the animated opening theater, pull result page, personal collection, shipping
-  center, order tracking UI, weekly-free-pack claim UI, loyalty dashboard, referral
-  dashboard, affiliate program UI, social profiles/feed/showcases/clubs/challenges,
-  notifications center, security center, support/dispute UI, and the entire admin
-  dashboard. The data model for all of these exists; the API routes and UI do not.
-- **Auth API routes**: session/token/wallet-verification _logic_ is implemented and
-  tested (see above), but there are no `/api/auth/*` route handlers wiring them up yet
-  (signup, login, wallet-link, logout, session listing/revocation endpoints).
+- **UI pages built**: landing page, pack marketplace, pack detail (now with per-card
+  reference values and a "max obtainable card value" summary), provably-fair verifier
+  (with a real working `/api/fairness/verify` endpoint), odds library + JSON download, and
+  an opening-theater page at `/packs/[tierKey]/open` (see below).
+- **Opening theater** (`/packs/[tierKey]/open`): real page, not a mock. Carousel to browse
+  tiers → drag-to-rip gesture (`RipToOpen`) → calls the real
+  `/api/x402/algorand/v1/packs/open` endpoint to create a pack offer → since there is
+  still no wallet-connect UI, the real `PaymentRequirements` (amount, payTo) are displayed
+  honestly instead of a fake reveal. If a wallet flow is added later and supplies a real
+  `X-PAYMENT` header, `settleOfferAndOpen` already resolves the actual card, resolves its
+  image via `src/server/card-images/resolver.ts`, and the reveal wheel
+  (`CardRevealWheel`) spins down to and flips over that real card — this path is wired but
+  not reachable end-to-end without wallet UI. A low-probability (15%), purely cosmetic
+  coin-flip flourish (`CoinFlip.tsx`) can occasionally re-play the reveal spin after
+  landing — it never changes the real fairness-selected card or its odds.
+- **UI pages NOT built**: wallet-center UI (and any wallet-connect flow at all — the
+  opening theater cannot complete a real purchase without this), signup/login forms,
+  personal collection, shipping center, order tracking UI, weekly-free-pack claim UI,
+  loyalty dashboard, referral dashboard, affiliate program UI, social
+  profiles/feed/showcases/clubs/challenges, notifications center, security center,
+  support/dispute UI, and the entire admin dashboard. The data model for all of these
+  exists; the API routes and UI do not.
 - **Free-pack claim / loyalty recalculation jobs**: pure calculation logic exists and is
   tested; there is no scheduled job or API route that actually grants/claims a weekly pack
   or recalculates a user's loyalty level.
@@ -121,9 +132,24 @@ run db:migrate && npm run db:seed` to verify.
 - **Social moderation**: only the data model exists. No code.
 - **Admin dashboard**: only the data model (`admin_users`, `audit_events`, etc.) exists.
   No RBAC enforcement code or UI.
-- **Higgsfield pack artwork prompts**: not generated — see `docs/HIGGSFIELD_PROMPTS.md` for
-  the prompt spec to use with an image-generation tool; no images were produced in this
-  session.
+- **CardImageResolver** (`src/server/card-images/resolver.ts`): implements the documented
+  priority chain (supplier photo → PSA graded scan → CardTrader catalog → public catalog
+  APIs → PackX402 fallback) with a domain-allowlist/SSRF guard on any resolved URL. Every
+  provider except the final fallback returns `null` in this environment — none of
+  CardTrader photo access, PSA cert lookup, or outbound network fetches are available
+  here — so it currently always resolves to the generic card-back PLACEHOLDER. The chain,
+  types, and guard are real and tested (`resolver.test.ts`); only the live provider calls
+  are unimplemented stubs, consistent with this repo's mock-default pattern elsewhere.
+- **Pack artwork**: real Higgsfield-generated cartoon-style art (cel-shaded, "PackX402"
+  wordmark, transparent-background cutouts) installed for all 10 unlocked tiers at
+  `public/packs/*.png` — see `docs/HIGGSFIELD_PROMPTS.md`. Crown/Vault/Grail/Genesis
+  remain CSS placeholders (locked tiers).
+- **Max-obtainable-value cap**: `src/server/config/pack-tiers.ts`'s
+  `procurementPriceCapUsdcBaseUnits` now follows a tapering per-tier multiplier
+  (`MAX_OBTAINABLE_VALUE_MULTIPLIER`) instead of a flat 1.15x — e.g. Spark ($0.50) caps at
+  $25 (50x), Genesis ($10,000) caps at $20,000 (2x). This is a deliberate EV/odds design
+  choice; see `docs/LEGAL_REVIEW_REQUIRED.md` for the responsible-purchasing disclosure
+  implications before this ships beyond beta.
 - **Playwright e2e tests**: not written. Only Vitest unit/integration tests exist.
 - **GitHub Actions CI / issue templates / CODEOWNERS**: see `docs/` and `.github/` — being
   added in this same pass; check their presence directly rather than trusting this
@@ -131,15 +157,19 @@ run db:migrate && npm run db:seed` to verify.
 
 ## Immediate next steps (in priority order)
 
-1. `docker compose up -d && npm run db:migrate && npm run db:seed`, then `npm run dev` and
-   manually click through the marketplace/pack-detail pages to catch anything a live DB
-   surfaces that type-checking couldn't.
-2. Build `/api/auth/*` routes on top of the already-tested session/wallet-verification
-   logic, plus signup/login UI.
+1. Build a real wallet-connect flow (Pera/Defly for Algorand, Phantom for Solana/EVM) —
+   this is now the single blocker keeping the opening theater from completing a real
+   purchase end to end; everything past payment (settlement, fairness reveal, card image
+   resolution, reveal animation) is already wired and ready to receive it.
+2. `docker compose up -d && npm run db:migrate && npm run db:seed`, then `npm run dev` and
+   manually click through the marketplace/pack-detail/opening-theater pages to catch
+   anything a live DB surfaces that type-checking couldn't.
 3. Build the supplier-purchase worker process (a long-running consumer of the
    `supplier_purchases` queue) — currently only enqueues, never processes.
 4. Wire real rolling-spend aggregation into `offer-service.ts`'s limit check.
-5. Build the opening-theater UI and wire it to the now-working x402 endpoint.
+5. Wire a live CardTrader photo/catalog credential (or PSA/public-catalog credential) into
+   `src/server/card-images/resolver.ts`'s provider stubs so real card images resolve
+   instead of always falling back to the placeholder.
 6. Obtain CardTrader and GoPlausible sandbox credentials and run an actual integration
    test pass before ever setting `CARDTRADER_MODE=live` or
    `X402_FACILITATOR_MODE=live` outside of TestNet dry runs.

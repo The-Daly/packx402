@@ -9,8 +9,9 @@ import {
 } from "@/server/packs/offer-service";
 import { PACK_TIERS } from "@/server/config/pack-tiers";
 import { db } from "@/server/db/client";
-import { rips, fairnessProofs } from "@/server/db/schema";
+import { rips, fairnessProofs, supplierListings, poolEntries } from "@/server/db/schema";
 import { eq } from "drizzle-orm";
+import { resolveCardImage } from "@/server/card-images/resolver";
 
 /**
  * x402 competition endpoint (spec section 41).
@@ -71,6 +72,30 @@ export async function POST(req: NextRequest) {
         .where(eq(fairnessProofs.ripId, result.ripId))
         .limit(1);
 
+      let resolvedImage = null;
+      if (rip) {
+        const [joined] = await db
+          .select({
+            cardGame: poolEntries.cardGame,
+            supplierListingId: supplierListings.id,
+            supplierImageUsePermitted: supplierListings.imageUsePermitted,
+          })
+          .from(poolEntries)
+          .leftJoin(supplierListings, eq(supplierListings.id, poolEntries.supplierListingId))
+          .where(eq(poolEntries.id, rip.poolEntryId))
+          .limit(1);
+
+        resolvedImage = await resolveCardImage({
+          cardGame: joined?.cardGame ?? "other",
+          cardName: rip.cardName,
+          setName: rip.setName,
+          cardNumber: rip.cardNumber,
+          supplierListingId: joined?.supplierListingId ?? null,
+          supplierImageUsePermitted: joined?.supplierImageUsePermitted ?? false,
+          certificationNumber: rip.gradeLabel,
+        });
+      }
+
       const res = NextResponse.json({
         ripId: result.ripId,
         card: rip
@@ -83,6 +108,7 @@ export async function POST(req: NextRequest) {
               gradeLabel: rip.gradeLabel,
             }
           : null,
+        resolvedImage,
         fairnessProof: proof
           ? {
               serverSeedCommitment: proof.serverSeedCommitment,
