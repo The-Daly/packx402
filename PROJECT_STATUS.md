@@ -159,10 +159,15 @@ run db:migrate && npm run db:seed` to verify.
 
 ## What's scaffolded (schema only) or not started (⬜)
 
-- **UI pages built**: landing page, pack marketplace, pack detail (now with per-card
-  reference values and a "max obtainable card value" summary), provably-fair verifier
-  (with a real working `/api/fairness/verify` endpoint), odds library + JSON download, and
-  an opening-theater page at `/packs/[tierKey]/open` (see below).
+- **UI pages built**: landing page (now with an interactive, no-DB, no-wallet demo of the
+  full carousel-select → rip → spin → reveal → bonus-flip sequence via the shared
+  `InteractivePackDemo` component, plus a plain-language 4-step walkthrough of the
+  commit-reveal fairness algorithm — verified live in-browser that pack selection and rip
+  progression both work), pack marketplace, pack detail (now with per-card reference
+  values and a "max obtainable card value" summary), provably-fair verifier (with a real
+  working `/api/fairness/verify` endpoint), odds library + JSON download, and an
+  opening-theater page at `/packs/[tierKey]/open` (see below). The same `InteractivePackDemo`
+  also powers the dev-only `/dev/rip-preview` page (useful when Postgres isn't running).
 - **Opening theater** (`/packs/[tierKey]/open`): real page, not a mock. Pack shelf →
   drag-to-rip gesture (`RipToOpen`) → calls the real `/api/x402/algorand/v1/packs/open`
   endpoint to create a pack offer → **Pera Wallet is now really wired up**

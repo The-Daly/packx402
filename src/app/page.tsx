@@ -3,6 +3,7 @@ import { db } from "@/server/db/client";
 import { packTiers } from "@/server/db/schema";
 import { asc, eq } from "drizzle-orm";
 import { FeaturedPacksCarousel } from "./FeaturedPacksCarousel";
+import { InteractivePackDemo } from "@/components/pack-art/InteractivePackDemo";
 import type { PackTierKey } from "@/server/config/pack-tiers";
 
 export const revalidate = 60;
@@ -52,6 +53,61 @@ export default async function HomePage() {
             >
               How fairness works
             </Link>
+          </div>
+        </div>
+      </section>
+
+      <section className="border-border-subtle from-background via-surface to-background border-b bg-gradient-to-b">
+        <div className="mx-auto max-w-6xl px-6 py-16">
+          <div className="mb-10 text-center">
+            <p className="text-accent mb-3 text-sm font-semibold tracking-[0.3em] uppercase">
+              Try it right now
+            </p>
+            <h2 className="text-3xl font-semibold tracking-tight">Rip a pack. No wallet needed.</h2>
+            <p className="text-muted mx-auto mt-3 max-w-xl">
+              This is the exact drag-to-rip, spin, and reveal sequence every real pack goes
+              through — just without a real card on the other end.
+            </p>
+          </div>
+
+          <div className="grid gap-12 lg:grid-cols-2 lg:items-start">
+            <InteractivePackDemo />
+
+            <div>
+              <h3 className="mb-6 text-xl font-semibold">How the algorithm decides your card</h3>
+              <ol className="space-y-5">
+                <AlgorithmStep
+                  number="1"
+                  title="Before you pay"
+                  body="PackX402 generates a secret server seed and publishes only its hash — a commitment. It cannot be changed after this point without the hash no longer matching."
+                  code="commitment = sha256(serverSeed)"
+                />
+                <AlgorithmStep
+                  number="2"
+                  title="You pay"
+                  body="Your payment settles on-chain, producing a payment identifier and a piece of post-settlement chain randomness nobody — including PackX402 — could have predicted beforehand."
+                  code='chainRandomness = block.seed'
+                />
+                <AlgorithmStep
+                  number="3"
+                  title="The seed is revealed"
+                  body="PackX402 publishes the server seed. Combined with your payment identifier, the chain randomness, and the pool hash, one sha256 hash determines your card."
+                  code="roll = sha256(seed | nonce | payment | chainRandom | poolHash)"
+                />
+                <AlgorithmStep
+                  number="4"
+                  title="Anyone can verify"
+                  body="Recompute the same hash yourself, or use the verifier — it will select the exact same card, every time, for anyone."
+                  code="verify(proof) === true"
+                />
+              </ol>
+              <Link
+                href="/fairness"
+                className="text-accent hover:text-accent-strong mt-6 inline-block text-sm font-semibold"
+              >
+                Full technical breakdown →
+              </Link>
+            </div>
           </div>
         </div>
       </section>
@@ -123,5 +179,32 @@ function InfoCard({ title, body }: { title: string; body: string }) {
       <h3 className="text-accent mb-2 font-semibold">{title}</h3>
       <p className="text-muted text-sm">{body}</p>
     </div>
+  );
+}
+
+function AlgorithmStep({
+  number,
+  title,
+  body,
+  code,
+}: {
+  number: string;
+  title: string;
+  body: string;
+  code: string;
+}) {
+  return (
+    <li className="flex gap-4">
+      <span className="border-accent/40 bg-surface text-accent flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm font-bold">
+        {number}
+      </span>
+      <div>
+        <p className="font-semibold">{title}</p>
+        <p className="text-muted mt-1 text-sm">{body}</p>
+        <code className="border-border-subtle bg-surface text-accent mt-2 inline-block rounded-md border px-2 py-1 text-xs">
+          {code}
+        </code>
+      </div>
+    </li>
   );
 }
