@@ -219,13 +219,26 @@ run db:migrate && npm run db:seed` to verify.
   do not have a video yet** — generation stopped mid-batch when the Higgsfield workspace
   ran out of credits; same pipeline (closed + torn stills → kling3_0
   interpolation) needed per tier once art is finalized.
-- **Mock CardTrader fixture ladder refreshed with live market data**: replaced the
-  ~20-card hand-authored mock inventory (`src/server/suppliers/cardtrader/fixtures.ts`)
-  with 110 real cards — 90 Pokemon (Base Set/Gym Heroes/Neo Genesis via api.pokemontcg.io)
-  and 20 Yu-Gi-Oh (via db.ygoprodeck.com), each carrying that card's real market price at
-  fetch time (2026-08-02 snapshot), spanning $0.08-$1,300. CardTrader itself is still mock
-  mode (see AGENTS.md) — only the card identity/pricing is now real instead of invented.
-  `db:seed`'s pool-version label bumped to `2026-08-02.2` to reflect the refresh.
+- **Mock CardTrader fixture ladder expanded to 200 real cards, plus a hard price-cap
+  safety fix**: `src/server/suppliers/cardtrader/fixtures.ts` now has 180 real Pokemon
+  cards (sampled from 799 candidates across 9 real sets — Base Set, Jungle, Fossil, Team
+  Rocket, Gym Heroes, Gym Challenge, Neo Genesis, Neo Discovery, Neo Revelation, via
+  api.pokemontcg.io) plus 20 real Yu-Gi-Oh cards (via db.ygoprodeck.com), each carrying
+  that card's real tcgplayer market price at fetch time (2026-08-02 snapshot), spanning
+  $0.05-$1,300, deliberately biased toward the cheap end so Spark/Starter's rarity bands
+  have real in-band matches. CardTrader itself is still mock mode (see AGENTS.md) — only
+  the card identity/pricing is real. **`pickFixtureForBand` (rarity-bands.ts) now takes a
+  hard `absoluteMaxUsdcBaseUnits` cap**, applied before both the in-band search and the
+  closest-match fallback — previously the fallback had no upper bound at all, so a cheap
+  tier with no in-band candidate could theoretically land a wildly expensive fixture (a
+  real gap, not hypothetical: closest-match-only logic has no ceiling by construction).
+  `db:seed` now passes each tier's own `procurementPriceCapUsdcBaseUnits` (the same
+  20x-price ceiling used elsewhere) as that cap. Verified by simulation against the live
+  fixture ladder: Spark's ($0.50) actual max obtainable came out to $5.47, Starter's ($1)
+  to $10.90 — both well under their $10/$20 caps, and every rarity band resolved to a real
+  in-band fixture rather than a fallback pick. Two new regression tests in
+  `rarity-bands.test.ts` lock in the cap behavior. `db:seed`'s pool-version label bumped
+  to `2026-08-02.3`.
 - **Opening theater** (`/packs/[tierKey]/open`): real page, not a mock. Pack shelf →
   drag-to-rip gesture (`RipToOpen`) → calls the real `/api/x402/algorand/v1/packs/open`
   endpoint to create a pack offer → **Pera Wallet is now really wired up**

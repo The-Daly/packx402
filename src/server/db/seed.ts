@@ -15,21 +15,34 @@ import { eq } from "drizzle-orm";
  * Pool entries follow the six-rarity structure in
  * src/server/packs/rarity-bands.ts (Common/Uncommon/Rare/Epic/Legendary/Grail, fixed odds,
  * price bands scaled to each tier's own price) — one representative fixture per rarity,
- * picked from the mock fixture ladder. The ladder (src/server/suppliers/cardtrader/fixtures.ts)
- * is 90 real Pokemon cards with real 2026-08-02 tcgplayer market prices, spanning $0.33-$1,300 —
- * still a mock CardTrader listing (see AGENTS.md), but card identity/pricing is real, not
- * hand-invented. A real supplier catalog would curate multiple listings per band; this is a
- * simple, transparent stand-in, not a claim about real-world pull rates.
+ * picked from the mock fixture ladder via `pickFixtureForBand`, which now also enforces a
+ * HARD absolute price cap (the tier's own `procurementPriceCapUsdcBaseUnits`) so a cheap
+ * tier can never fall back onto a wildly expensive fixture just because its band has no
+ * in-range candidate. The ladder (src/server/suppliers/cardtrader/fixtures.ts) is 180 real
+ * Pokemon cards + 20 real Yu-Gi-Oh cards with real 2026-08-02 tcgplayer market prices,
+ * spanning $0.05-$1,300 — still a mock CardTrader listing (see AGENTS.md), but card
+ * identity/pricing is real, not hand-invented. A real supplier catalog would curate
+ * multiple listings per band; this is a simple, transparent stand-in, not a claim about
+ * real-world pull rates.
  *
  * Run with: npm run db:seed (requires `docker compose up -d && npm run db:migrate` first).
  */
 
-function buildPoolEntriesForTier(tierPriceUsdcBaseUnits: number) {
+function buildPoolEntriesForTier(
+  tierPriceUsdcBaseUnits: number,
+  procurementPriceCapUsdcBaseUnits: number,
+) {
   const bands = rarityBandsForTierPrice(tierPriceUsdcBaseUnits);
 
   return bands
     .map((band) => {
-      const fixture = pickFixtureForBand(MOCK_CARDTRADER_INVENTORY, band);
+      // Hard absolute cap — never just the band's own max — so a cheap tier can never
+      // fall back onto a wildly expensive fixture if its band has no in-range candidate.
+      const fixture = pickFixtureForBand(
+        MOCK_CARDTRADER_INVENTORY,
+        band,
+        procurementPriceCapUsdcBaseUnits,
+      );
       if (!fixture) return null;
       return {
         fixture,
@@ -129,7 +142,10 @@ async function main() {
       .limit(1);
     if (!tierRow) continue;
 
-    const entriesSpec = buildPoolEntriesForTier(tierRow.priceUsdcBaseUnits);
+    const entriesSpec = buildPoolEntriesForTier(
+      tierRow.priceUsdcBaseUnits,
+      tierRow.procurementPriceCapUsdcBaseUnits,
+    );
     if (entriesSpec.length === 0) {
       console.log(`  ${tierDef.key}: no fixtures available, skipping`);
       continue;
@@ -145,7 +161,7 @@ async function main() {
       .insert(poolVersions)
       .values({
         packTierId: tierRow.id,
-        versionLabel: "2026-08-02.2", // bumped: fixture ladder refreshed with real Pokemon TCG market data
+        versionLabel: "2026-08-02.3", // bumped: expanded fixture ladder (180 real Pokemon cards) + hard price-cap fix
         isPromotional: false,
         poolHash,
         oddsHash,

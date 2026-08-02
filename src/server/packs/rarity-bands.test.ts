@@ -82,4 +82,21 @@ describe("pickFixtureForBand", () => {
   it("returns null for an empty candidate list", () => {
     expect(pickFixtureForBand([], band)).toBeNull();
   });
+
+  it("never returns a fixture above the hard absolute cap, even via the closest-match fallback", () => {
+    // Regression test: a cheap tier (e.g. Spark, $0.50) with no in-band candidate must
+    // never fall back onto a wildly expensive fixture just because it's "closest" to the
+    // band's target — a $300 card must never come out of a $0.50 pack.
+    const candidates = [
+      { id: "cheap", priceUsdcBaseUnits: 1_000_000 }, // $1 — outside this band, but within cap
+      { id: "expensive", priceUsdcBaseUnits: 300_000_000 }, // $300 — closest to the $5.5 target, but over cap
+    ];
+    const result = pickFixtureForBand(candidates, band, 10_000_000); // $10 absolute cap
+    expect(result?.id).toBe("cheap");
+  });
+
+  it("returns null when every candidate exceeds the absolute cap", () => {
+    const candidates = [{ id: "a", priceUsdcBaseUnits: 300_000_000 }];
+    expect(pickFixtureForBand(candidates, band, 10_000_000)).toBeNull();
+  });
 });

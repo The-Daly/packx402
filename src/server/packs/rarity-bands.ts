@@ -73,18 +73,32 @@ export interface FixtureLike {
  * one whose price falls inside [min, max]; if none qualify, falls back to whichever
  * fixture's price is numerically closest to the band (mock-data approximation only — a
  * live supplier catalog would have real inventory in every band). Returns null if the
- * candidate list is empty.
+ * candidate list (after the absolute cap below) is empty.
+ *
+ * `absoluteMaxUsdcBaseUnits`, when given, is a HARD ceiling applied before either the
+ * in-band search or the closest-match fallback — never optional, never bypassed. Without
+ * it, the closest-match fallback alone could hand a cheap tier (e.g. Spark at $0.50) a
+ * wildly expensive card (e.g. a $1,300 Lugia) if the fixture ladder happened to have a
+ * gap right around that tier's band, since "closest to target" has no upper bound of its
+ * own. Callers should always pass the tier's own procurement price cap
+ * (`procurementPriceCapUsdcBaseUnits` in pack-tiers.ts, itself the same 20x-price ceiling
+ * as the Grail band's own upper bound) — see seed.ts.
  */
 export function pickFixtureForBand<T extends FixtureLike>(
   candidates: T[],
   band: RarityPriceBand,
+  absoluteMaxUsdcBaseUnits?: number,
 ): T | null {
-  if (candidates.length === 0) return null;
+  const capped =
+    absoluteMaxUsdcBaseUnits === undefined
+      ? candidates
+      : candidates.filter((c) => c.priceUsdcBaseUnits <= absoluteMaxUsdcBaseUnits);
+  if (capped.length === 0) return null;
 
-  const inBand = candidates.filter(
+  const inBand = capped.filter(
     (c) => c.priceUsdcBaseUnits >= band.minPriceUsdcBaseUnits && c.priceUsdcBaseUnits <= band.maxPriceUsdcBaseUnits,
   );
-  const pool = inBand.length > 0 ? inBand : candidates;
+  const pool = inBand.length > 0 ? inBand : capped;
 
   const target = (band.minPriceUsdcBaseUnits + band.maxPriceUsdcBaseUnits) / 2;
   return pool.reduce((closest, candidate) =>
