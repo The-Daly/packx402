@@ -62,6 +62,35 @@ function playTearSound() {
 
 const SPARKLE_POSITIONS = [12, 28, 45, 62, 78, 90]; // percent across the top tear seam
 
+// Builds a jagged, torn-paper-style clip-path boundary instead of a clean straight cut —
+// both pieces share the exact same zigzag line so their edges interlock with no gap/overlap.
+const ZIGZAG_TEETH = 9;
+const ZIGZAG_DEPTH_PERCENT = 3.5;
+
+function zigzagPoints(seamPercent: number): string {
+  const points: string[] = [];
+  for (let i = 0; i <= ZIGZAG_TEETH; i++) {
+    const x = (i / ZIGZAG_TEETH) * 100;
+    const y = seamPercent + (i % 2 === 0 ? 0 : ZIGZAG_DEPTH_PERCENT);
+    points.push(`${x}% ${y}%`);
+  }
+  return points.join(", ");
+}
+
+function topPieceClipPath(seamPercent: number): string {
+  // From the top-left corner, across the top edge, down the jagged seam, back to start.
+  return `polygon(0% 0%, 100% 0%, ${zigzagPoints(seamPercent)
+    .split(", ")
+    .reverse()
+    .join(", ")})`;
+}
+
+function bottomPieceClipPath(seamPercent: number): string {
+  // The jagged seam, then down around the rest of the pack — the exact complement of
+  // the top piece, so releasing early and springing back shows no seam at all.
+  return `polygon(${zigzagPoints(seamPercent)}, 100% 100%, 0% 100%)`;
+}
+
 function TearSparkles({ active }: { active: boolean }) {
   if (!active) return null;
   return (
@@ -146,32 +175,32 @@ export function RipToOpen({ children, onRipped, disabled = false, className }: R
     );
   }
 
+  const topClip = topPieceClipPath(TOP_SEAM_PERCENT);
+  const bottomClip = bottomPieceClipPath(TOP_SEAM_PERCENT);
+
   return (
     <div className={["relative", className ?? ""].join(" ")}>
       <TearSparkles active={dragging || committed} />
 
-      {/* Top seam strip — clipped and animated up/away as the pack tears open. Only a
-          small strip near the top, not the whole top half. */}
+      {/* Top seam strip — jagged torn-edge clip, animated up/away as the pack tears open.
+          Only a small strip near the top, not the whole top half. */}
       <motion.div
         className="pointer-events-none absolute inset-0 overflow-hidden"
-        style={{
-          clipPath: `inset(0 0 ${100 - TOP_SEAM_PERCENT}% 0)`,
-          y: topY,
-          rotate: topRotate,
-          opacity: topOpacity,
-        }}
+        style={{ clipPath: topClip, y: topY, rotate: topRotate, opacity: topOpacity }}
         aria-hidden="true"
       >
         {children}
       </motion.div>
-      {/* The rest of the pack — stays in place, fades slightly as the reveal takes over. */}
-      <div className="overflow-hidden" style={{ clipPath: `inset(${TOP_SEAM_PERCENT}% 0 0 0)` }}>
+      {/* The rest of the pack — stays in place, its newly-exposed top edge matching the
+          torn piece's jagged boundary exactly, darkened slightly like a real torn edge. */}
+      <div className="overflow-hidden" style={{ clipPath: bottomClip }}>
         <motion.div style={{ y: bottomY, opacity: bottomOpacity }}>{children}</motion.div>
       </div>
 
+      {/* Drag surface covers the whole pack — the rip gesture works from anywhere on it,
+          not just a small handle. The handle graphic below is a visual hint only. */}
       {!disabled && !committed && (
         <>
-          {/* Drag-across handle pinned to the top tear seam. */}
           <motion.div
             drag="x"
             dragConstraints={{ left: 0, right: 0 }}
@@ -180,16 +209,17 @@ export function RipToOpen({ children, onRipped, disabled = false, className }: R
             onDragStart={() => setDragging(true)}
             onDrag={handleDrag}
             onDragEnd={handleDragEnd}
-            className="absolute inset-x-4 top-2 z-10 flex h-8 cursor-grab items-center justify-center gap-1.5 touch-none active:cursor-grabbing"
+            className="absolute inset-0 z-10 cursor-grab touch-none active:cursor-grabbing"
             role="slider"
-            aria-label="Drag across to rip the pack open"
+            aria-label="Drag to rip the pack open"
             aria-valuenow={Math.round(ripProgress.get() * 100)}
-          >
+          />
+          <div className="pointer-events-none absolute inset-x-4 top-2 z-20 flex h-8 items-center justify-center gap-1.5">
             <span className="border-accent/50 bg-background/60 h-[3px] w-10 rounded-full border-t border-dashed" />
             <span className="text-muted text-[10px] tracking-wide uppercase">Drag to rip</span>
             <span className="border-accent/50 bg-background/60 h-[3px] w-10 rounded-full border-t border-dashed" />
-          </motion.div>
-          <p className="text-muted mt-3 text-center text-xs">Drag across the top to rip it open</p>
+          </div>
+          <p className="text-muted mt-3 text-center text-xs">Drag anywhere on the pack to rip it open</p>
         </>
       )}
     </div>
