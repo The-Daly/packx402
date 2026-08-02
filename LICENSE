@@ -1,0 +1,12 @@
+Copyright (c) 2026 The-Daly. All rights reserved.
+
+This repository is publicly visible for transparency and collaboration purposes only.
+No license is granted to copy, modify, distribute, sublicense, or use this software or
+any portion of it, in source or compiled form, for any purpose, without prior written
+permission from the copyright holder.
+
+NOTE TO MAINTAINER: this default was chosen automatically because a license decision
+prompt went unanswered during the initial scaffold. This is a placeholder appropriate for
+a proprietary commercial product kept on a public repo for transparency — revisit and
+replace with your actual intended license (proprietary, MIT, Business Source License,
+etc.) before this matters for a real dispute. See the PR description for context.

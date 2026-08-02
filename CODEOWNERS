@@ -1,0 +1,10 @@
+# Default owner for everything in the repo.
+* @The-Daly
+
+# Security-sensitive areas — require extra scrutiny.
+/src/server/fairness/ @The-Daly
+/src/server/payments/ @The-Daly
+/src/server/auth/ @The-Daly
+/src/server/crypto/ @The-Daly
+/src/server/db/schema/ @The-Daly
+/.github/workflows/ @The-Daly

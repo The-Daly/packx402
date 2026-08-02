@@ -46,7 +46,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# --- Pack402 secrets & sensitive data (never commit) ---
+# --- PackX402 secrets & sensitive data (never commit) ---
 *.pem
 *.key
 *.p12
