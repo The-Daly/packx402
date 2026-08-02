@@ -3,52 +3,39 @@ import { packTiers, poolVersions, poolEntries, suppliers, supplierListings } fro
 import { PACK_TIERS } from "@/server/config/pack-tiers";
 import { sha256Hex } from "@/server/fairness/engine";
 import { MOCK_CARDTRADER_INVENTORY } from "@/server/suppliers/cardtrader/fixtures";
+import { rarityBandsForTierPrice, pickFixtureForBand } from "@/server/packs/rarity-bands";
 import { eq } from "drizzle-orm";
 
 /**
  * Seeds the fixed pack tier catalog, one CardTrader mock-mode supplier, its fixture
- * listings, and a published pool version + entries for every one of the 14 pack tiers
- * (commons + a chase card drawn from the fixture ladder, scaled to each tier's
- * procurement cap) so the marketplace, pack-detail odds table, and opening flow are
- * demoable end to end in mock/testnet mode for every tier, not just a couple.
+ * listings, and a published pool version + entries for every one of the 14 pack tiers so
+ * the marketplace, pack-detail odds table, and opening flow are demoable end to end in
+ * mock/testnet mode for every tier, not just a couple.
+ *
+ * Pool entries follow the six-rarity structure in
+ * src/server/packs/rarity-bands.ts (Common/Uncommon/Rare/Epic/Legendary/Grail, fixed odds,
+ * price bands scaled to each tier's own price) — one representative fixture per rarity,
+ * picked from the mock fixture ladder. A real supplier catalog would curate multiple
+ * listings per band; the mock ladder only has ~20 fixtures total, so this is a simple,
+ * transparent stand-in, not a claim about real-world pull rates.
  *
  * Run with: npm run db:seed (requires `docker compose up -d && npm run db:migrate` first).
  */
 
-// Commons carry the bulk of the weight; the single most expensive eligible fixture
-// becomes the tier's "chase" card at a small weight — a simple, transparent stand-in for
-// real supplier-driven odds curation, not a claim about real-world pull rates.
-const COMMON_WEIGHTS = [550, 300, 100]; // sums to 950 when 3 commons are available
-const CHASE_WEIGHT = 50;
+function buildPoolEntriesForTier(tierPriceUsdcBaseUnits: number) {
+  const bands = rarityBandsForTierPrice(tierPriceUsdcBaseUnits);
 
-function buildPoolEntriesForTier(procurementCapUsdcBaseUnits: number) {
-  const eligible = MOCK_CARDTRADER_INVENTORY.filter(
-    (f) => f.priceUsdcBaseUnits <= procurementCapUsdcBaseUnits,
-  ).sort((a, b) => a.priceUsdcBaseUnits - b.priceUsdcBaseUnits);
-
-  if (eligible.length === 0) return [];
-
-  const chase = eligible[eligible.length - 1];
-  const commonsPool = eligible.slice(0, -1);
-  const commons = commonsPool.slice(0, Math.min(3, commonsPool.length));
-
-  const totalCommonWeight = COMMON_WEIGHTS.slice(0, commons.length).reduce((a, b) => a + b, 0);
-  const entries = commons.map((fixture, i) => ({
-    fixture,
-    weight: COMMON_WEIGHTS[i],
-    probabilityBandLabel: `~${Math.round((COMMON_WEIGHTS[i] / (totalCommonWeight + (commons.length > 0 ? CHASE_WEIGHT : 0))) * 100)}%`,
-  }));
-
-  if (chase && chase.externalListingId !== commons[commons.length - 1]?.externalListingId) {
-    const denom = totalCommonWeight + CHASE_WEIGHT;
-    entries.push({
-      fixture: chase,
-      weight: CHASE_WEIGHT,
-      probabilityBandLabel: `~${Math.round((CHASE_WEIGHT / denom) * 100)}% (chase)`,
-    });
-  }
-
-  return entries;
+  return bands
+    .map((band) => {
+      const fixture = pickFixtureForBand(MOCK_CARDTRADER_INVENTORY, band);
+      if (!fixture) return null;
+      return {
+        fixture,
+        weight: band.oddsPer10000,
+        probabilityBandLabel: `${band.label} (~${(band.oddsPer10000 / 100).toFixed(2)}%)`,
+      };
+    })
+    .filter((e): e is NonNullable<typeof e> => e !== null);
 }
 
 async function main() {
@@ -140,9 +127,9 @@ async function main() {
       .limit(1);
     if (!tierRow) continue;
 
-    const entriesSpec = buildPoolEntriesForTier(tierRow.procurementPriceCapUsdcBaseUnits);
+    const entriesSpec = buildPoolEntriesForTier(tierRow.priceUsdcBaseUnits);
     if (entriesSpec.length === 0) {
-      console.log(`  ${tierDef.key}: no eligible fixtures under its procurement cap, skipping`);
+      console.log(`  ${tierDef.key}: no fixtures available, skipping`);
       continue;
     }
 
@@ -156,7 +143,7 @@ async function main() {
       .insert(poolVersions)
       .values({
         packTierId: tierRow.id,
-        versionLabel: "2026-08-01.1",
+        versionLabel: "2026-08-02.1", // bumped: pool structure changed to the six-rarity system
         isPromotional: false,
         poolHash,
         oddsHash,

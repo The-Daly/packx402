@@ -9,6 +9,8 @@
  * A frontend lock alone is never sufficient (spec section 3).
  */
 
+import { maxObtainableValueMultiplier } from "@/server/packs/rarity-bands";
+
 export type PackTierKey =
   | "spark"
   | "starter"
@@ -49,30 +51,15 @@ export interface PackTierDefinition {
 const USDC_BASE_UNITS_PER_DOLLAR = 1_000_000; // USDC has 6 decimals
 const usd = (dollars: number) => Math.round(dollars * USDC_BASE_UNITS_PER_DOLLAR);
 
-// Max-obtainable-value multiplier per tier: the ceiling on how expensive a single card in
-// a tier's pool can be, expressed as a multiple of the pack's own price. Tapers down as
-// price rises — a cheap pack can hit a big multiple of its price (Spark: $0.50 -> $25 max,
-// 50x) without the platform's per-pull financial exposure scaling linearly with price at
-// the top end (Genesis: $10,000 -> $20,000 max, only 2x). This is a deliberate,
-// user-directed design choice, distinct from (and now replaces) the old flat 1.15x
-// "barely above cost" cap — see PROJECT_STATUS.md and docs/LEGAL_REVIEW_REQUIRED.md for
-// the responsible-purchasing/EV-disclosure implications of this schedule.
-const MAX_OBTAINABLE_VALUE_MULTIPLIER: Record<PackTierKey, number> = {
-  spark: 50,
-  starter: 40,
-  scout: 30,
-  bronze: 25,
-  silver: 20,
-  gold: 15,
-  prism: 12,
-  platinum: 10,
-  obsidian: 8,
-  mythic: 6,
-  crown: 5,
-  vault: 4,
-  grail: 3,
-  genesis: 2,
-};
+// Max-obtainable-value multiplier: the ceiling on how expensive a single card in a tier's
+// pool can be, expressed as a multiple of the pack's own price. This is the same uniform
+// 20x used as the Grail rarity band's upper bound in src/server/packs/rarity-bands.ts —
+// that six-rarity structure (Common/Uncommon/Rare/Epic/Legendary/Grail) is applied to
+// every tier, scaled to that tier's own price, so the cap has to match its top band
+// exactly (a $5 pack's Grail band is $9-$100, i.e. 20x — see rarity-bands.test.ts).
+// Supersedes an earlier per-tier tapering schedule (50x down to 2x); see
+// PROJECT_STATUS.md and docs/LEGAL_REVIEW_REQUIRED.md for the EV-disclosure implications.
+const MAX_OBTAINABLE_VALUE_MULTIPLIER = maxObtainableValueMultiplier();
 
 // Beta default availability:
 // - TestNet / Solana / EVM: Spark through Mythic ($250) — everything the current
@@ -114,7 +101,7 @@ function buildTier(
     estimatedShippingUsdcBaseUnits: usd(4.99),
     cardGames: ["pokemon", "yugioh"],
     minDisclosedCondition: "lightly_played",
-    procurementPriceCapUsdcBaseUnits: usd(priceDollars * MAX_OBTAINABLE_VALUE_MULTIPLIER[key]),
+    procurementPriceCapUsdcBaseUnits: usd(priceDollars * MAX_OBTAINABLE_VALUE_MULTIPLIER),
     availableTestnet: TESTNET_CEILING.includes(key),
     availableAlgorandMainnet: MAINNET_CEILING.includes(key),
     availableSolana: TESTNET_CEILING.includes(key),

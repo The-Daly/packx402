@@ -37,6 +37,25 @@ production use.
   migration (`drizzle/0000_daffy_darkstar.sql`).
 - **Pack tier config**: all 14 tiers (Spark–Genesis), integer USDC base units, server-side
   network/value gating (`src/server/config/pack-tiers.ts`).
+- **Rarity-band pool structure** (`src/server/packs/rarity-bands.ts`): a fixed six-rarity
+  odds table (Common 25% / Uncommon 24.8% / Rare 16.1% / Epic 16.1% / Legendary 14% /
+  Grail 4%, summing to exactly 100.00%) applied uniformly to all 14 tiers, with each
+  rarity's price band scaled proportionally to that tier's own price (e.g. a $5 pack's
+  Grail band is $9–$100). The tier's `procurementPriceCapUsdcBaseUnits` is now derived
+  directly from the Grail band's upper bound (20x price) rather than a separate schedule.
+  8 unit tests, including an exact reproduction of the $5-tier example this was specified
+  against. `src/server/db/seed.ts` picks one representative fixture per rarity band from
+  the mock CardTrader ladder — a stand-in given the mock ladder's ~20 fixtures, not a claim
+  about real supplier inventory depth. Structurally inspired by a reference competitor
+  app's odds-breakdown UI, not its branding or its real-money cash-out mechanic (which
+  PackX402 does not have). A user-selectable "volatility level" that reshapes these odds
+  (also seen in that reference app) is **not implemented**.
+- **User-scoped pack-opening history** (`GET /api/packs/openings`): returns only the
+  authenticated user's own rips (joined through `packOffers.userId`), never a cross-user
+  listing. Deliberately separate from `/api/fairness/verify`, which stays public-by-ripId
+  on purpose — that's what makes fairness independently verifiable by any third party, not
+  just the pack's owner (see docs/FAIRNESS_PROTOCOL.md). No UI page consumes this endpoint
+  yet.
 - **Fairness engine** (`src/server/fairness/engine.ts`): deterministic server-seed-commit
   → reveal → sha256-combine → weighted selection algorithm. 12 unit tests including a
   **fixed, hand-computed test vector** (published in `docs/FAIRNESS_PROTOCOL.md`) so a
