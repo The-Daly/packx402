@@ -6,6 +6,7 @@ import { PackArt } from "./PackArt";
 import { CardOverlaySlot } from "./CardOverlaySlot";
 import { CardRevealWheel, type SpinPossibleCard } from "./CardRevealWheel";
 import { RipToOpen } from "./RipToOpen";
+import { RipToOpenVideo } from "./RipToOpenVideo";
 import { ResultEffect, type ResultIntensity } from "./ResultEffect";
 import type { ResolvedCardImage } from "@/shared/card-image";
 
@@ -25,6 +26,13 @@ export interface OpeningStageProps {
   /** Future hooks — see docs/ASSET_MANIFEST.md (pack402_idle_*, pack402_open_single_*). */
   idleVideoSrc?: string;
   openingVideoSrc?: string;
+  /** A real Higgsfield-generated tear-open video for this tier (see
+   * docs/HIGGSFIELD_PROMPTS.md) — when set, the drag gesture scrubs directly through it
+   * (RipToOpenVideo) instead of the CSS clip-path illusion (RipToOpen). Takes priority
+   * over idleVideoSrc. `ripOpenStillSrc` is the still shown during the brief "tearing"
+   * phase right after the video finishes — should match the video's own last frame. */
+  ripVideoSrc?: string;
+  ripOpenStillSrc?: string;
   onSkipReveal?: () => void;
   /** Fires once the user's drag-to-rip gesture commits (see RipToOpen). */
   onRipped?: () => void;
@@ -65,6 +73,8 @@ export function OpeningStage({
   resultIntensity = "standard",
   idleVideoSrc,
   openingVideoSrc,
+  ripVideoSrc,
+  ripOpenStillSrc,
   onSkipReveal,
   onRipped,
   onSpinComplete,
@@ -76,7 +86,13 @@ export function OpeningStage({
   return (
     <div className={["relative mx-auto w-full max-w-xs", className ?? ""].join(" ")}>
       {effectivePhase === "idle" ? (
-        idleVideoSrc ? (
+        ripVideoSrc ? (
+          <RipToOpenVideo
+            videoSrc={ripVideoSrc}
+            posterSrc={`/packs/${tierKey}.png`}
+            onRipped={() => onRipped?.()}
+          />
+        ) : idleVideoSrc ? (
           <video
             className="aspect-[2/3] w-full rounded-xl object-cover"
             src={idleVideoSrc}
@@ -98,15 +114,26 @@ export function OpeningStage({
           </RipToOpen>
         )
       ) : effectivePhase === "tearing" ? (
-        <PackArt
-          tierKey={tierKey}
-          tierName={tierName}
-          price={price}
-          size="detail"
-          priority
-          animationState="opening"
-          torn
-        />
+        ripVideoSrc && ripOpenStillSrc ? (
+          // A plain still matching the rip video's own last frame — next/image's extra
+          // machinery isn't worth it for a phase that lasts under a second.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={ripOpenStillSrc}
+            alt={`${tierName} pack, torn open`}
+            className="aspect-[2/3] w-full rounded-xl object-cover"
+          />
+        ) : (
+          <PackArt
+            tierKey={tierKey}
+            tierName={tierName}
+            price={price}
+            size="detail"
+            priority
+            animationState="opening"
+            torn
+          />
+        )
       ) : effectivePhase === "revealing" ? (
         <div className="relative flex justify-center">
           <ResultEffect intensity={resultIntensity} videoSrc={openingVideoSrc} active />

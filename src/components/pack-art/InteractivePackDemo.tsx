@@ -5,6 +5,7 @@ import { PackShelf, type PackShelfItem } from "./PackShelf";
 import { OpeningStage, type OpeningPhase } from "./OpeningStage";
 import { CoinFlip } from "./CoinFlip";
 import { CardOverlaySlot } from "./CardOverlaySlot";
+import { RIP_VIDEO_BY_TIER } from "./rip-video-map";
 
 const DEMO_TIERS: PackShelfItem[] = [
   { tierKey: "spark", tierName: "Spark", price: 500_000 },
@@ -109,6 +110,8 @@ export function InteractivePackDemo({ className }: InteractivePackDemoProps) {
               cardName="Charizard (demo)"
               resolvedImage={DEMO_RESOLVED_IMAGE}
               possibleCards={DEMO_POSSIBLE_CARDS}
+              ripVideoSrc={RIP_VIDEO_BY_TIER[selected.tierKey]?.video}
+              ripOpenStillSrc={RIP_VIDEO_BY_TIER[selected.tierKey]?.openStill}
               onRipped={handleRipped}
               onSpinComplete={handleRevealSettled}
             />

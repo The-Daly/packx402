@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { PackShelf, type PackShelfItem } from "@/components/pack-art/PackShelf";
 import { OpeningStage, type OpeningPhase } from "@/components/pack-art/OpeningStage";
+import { RIP_VIDEO_BY_TIER } from "@/components/pack-art/rip-video-map";
 import { CoinFlip } from "@/components/pack-art/CoinFlip";
 import { CardOverlaySlot } from "@/components/pack-art/CardOverlaySlot";
 import type { SpinPossibleCard } from "@/components/pack-art/CardRevealWheel";
@@ -196,6 +197,8 @@ export function OpenPackClient({
               cardName={cardName ?? undefined}
               resolvedImage={resolvedImage}
               possibleCards={possibleCards}
+              ripVideoSrc={RIP_VIDEO_BY_TIER[selected.tierKey]?.video}
+              ripOpenStillSrc={RIP_VIDEO_BY_TIER[selected.tierKey]?.openStill}
               onRipped={handleRipped}
               onSpinComplete={handleRevealSettled}
             />

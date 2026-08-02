@@ -184,17 +184,32 @@ run db:migrate && npm run db:seed` to verify.
   (`deriveBonusFlipHit` in `engine.ts`). The only place a different rate shows is the
   landing-page demo, which intentionally uses ~40% (clearly commented as demo-only) so the
   flourish is visible while clicking around instead of a 1-in-25 real rate.
-- **Torn-open pack art**: 4 of 14 tiers (Spark, Scout, Obsidian, Mythic — the tiers used in
-  the landing-page demo) now have a real Higgsfield-generated torn-pack render at
-  `public/packs/{tier}-torn.png`, shown briefly during the `"tearing"` phase right after the
-  rip gesture commits, before the reveal wheel spins (see `docs/ASSET_MANIFEST.md` and
-  `docs/HIGGSFIELD_PROMPTS.md`). Uses a clean straight tear line (not jagged) per explicit
-  direction. `PackArt`'s new `torn` prop falls back to the closed-pack art for any tier
-  without one yet — the remaining 10 tiers are a drop-in follow-up, zero code changes
-  needed. Verified the asset request succeeds (200 OK network log) during a live rip on the
-  landing-page demo; the CSS-only rip gesture animation itself (`RipToOpen.tsx`) was also
-  switched from a jagged zigzag clip-path to a single straight seam line, per the same
-  feedback.
+- **Pack art fully redesigned, standardized across all 10 unlocked tiers**: replaced the
+  earlier per-tier wordmark art with one consistent template — a glowing "P+X" vault-arc
+  emblem inside a corner-bracket frame, the tier name in a bottom pill badge, no "PackX402"
+  wordmark on the face at all. Only the material/color and a tier-specific background
+  motif differ (Spark: cyan lightning, Starter: copper sunburst, Scout: teal radar lines,
+  Bronze: bronze art-deco fan, Silver: diamond facets, Gold: gold sunburst, Prism:
+  holographic rays, Platinum: ice facets, Obsidian: cracked emerald glass, Mythic: cosmic
+  nebula). Iterated through several rounds of real user feedback (corner tick-marks
+  removed, font mispositioning issues abandoned in favor of no baked-in text at all,
+  emblem recentered to fill the face). See `docs/HIGGSFIELD_PROMPTS.md` for the exact
+  prompts.
+- **Real video-driven rip animation (Spark only so far)**: replaced the CSS clip-path rip
+  illusion with an actual Higgsfield-generated video of the pack tearing open
+  (`public/video/open/spark.mp4`, via `kling3_0` image-to-image interpolation between a
+  closed-pack still and a torn-open still). `RipToOpenVideo.tsx` maps the user's drag
+  progress directly to `video.currentTime` — dragging scrubs through the real tear
+  frame-by-frame; releasing past the commit threshold plays the video through to the end
+  before firing `onRipped()`; releasing short of it scrubs back to frame 0. Wired into
+  both the real opening theater (`OpenPackClient.tsx`) and the no-DB demo
+  (`InteractivePackDemo.tsx`) via a shared `RIP_VIDEO_BY_TIER` map
+  (`src/components/pack-art/rip-video-map.ts`) — any tier not in that map falls back to
+  the older `RipToOpen`/`PackArt` clip-path treatment, so this is a drop-in tier-by-tier
+  rollout, not an all-or-nothing swap. Verified live: dragged the real page, watched the
+  video's network request succeed and play through to the reveal wheel. The remaining 9
+  tiers still use the CSS clip-path rip — same pipeline (closed + torn stills → kling3_0
+  interpolation) needed per tier once art is finalized.
 - **Mock CardTrader fixture ladder refreshed with live market data**: replaced the
   ~20-card hand-authored mock inventory (`src/server/suppliers/cardtrader/fixtures.ts`)
   with 110 real cards — 90 Pokemon (Base Set/Gym Heroes/Neo Genesis via api.pokemontcg.io)
