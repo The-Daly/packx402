@@ -107,9 +107,11 @@ production use.
   `src/server/fairness/engine.ts`, wired into `settleOfferAndOpen`): a fixed 4% chance,
   evaluated server-side on every completed pack opening from the same committed fairness
   seed as the primary pull (never client-side randomness), of awarding a second real card
-  from the same pool. Real money/EV impact — see `docs/LEGAL_REVIEW_REQUIRED.md`'s new
-  note and `docs/FAIRNESS_PROTOCOL.md`'s bonus-flip addendum; **not yet disclosed** in the
-  pack-detail page's published odds table. Tested (4 new unit tests including a ~4%
+  from the same pool. Real money/EV impact — see `docs/LEGAL_REVIEW_REQUIRED.md`'s note
+  and `docs/FAIRNESS_PROTOCOL.md`'s bonus-flip addendum. **Now disclosed** on the
+  pack-detail page (a "Bonus flip: 4% chance of a second card" line) — still needs
+  counsel sign-off per the updated legal-review note, disclosure isn't the same as
+  clearance. Tested (4 new unit tests including a ~4%
   distribution check over 5000 trials); the DB schema change (`rips.kind` +
   `(packOfferId, kind)` composite unique index replacing the old single-column uniques) is
   captured in `drizzle/0002_sturdy_synch.sql`, unverified against a live Postgres.

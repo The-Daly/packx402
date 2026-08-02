@@ -55,13 +55,13 @@ fixtures.ts`) are factual identifiers of real, third-party-owned cards being res
 - **Bonus-flip mechanic** (`deriveBonusFlipHit`/`selectBonusPoolEntry` in
   `src/server/fairness/engine.ts`): a fixed 4% chance, evaluated on every completed pack
   opening, of awarding a second real card from the same pool alongside the one paid for.
-  This changes the effective expected value/odds of every pack tier and must be disclosed
-  in the published odds alongside the base pool weights — it is not currently reflected in
-  the pack-detail page's probability-band table or `docs/FAIRNESS_PROTOCOL.md`'s public
-  description of the algorithm. Counsel should confirm this doesn't change PackX402's
-  gambling-regulation analysis (an unadvertised "extra" reward on a fixed-price purchase
-  may read differently than a disclosed-upfront mechanic) and that the 4% figure itself is
-  disclosed to buyers before purchase, not just discoverable after the fact.
+  This changes the effective expected value/odds of every pack tier. The 4% figure is now
+  disclosed on the pack-detail page (a "Bonus flip: 4% chance of a second card" line) and
+  in `docs/FAIRNESS_PROTOCOL.md`'s addendum, both pre-purchase — but counsel should still
+  confirm this doesn't change PackX402's gambling-regulation analysis (an "extra" reward on
+  a fixed-price purchase, even disclosed, may read differently under some jurisdictions'
+  rules than the base mechanic alone), and that the disclosure wording/placement meets
+  whatever pre-purchase disclosure standard applies.
 
 ## Data protection
 

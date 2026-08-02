@@ -86,6 +86,8 @@ export default async function PackDetailPage({ params }: { params: Promise<{ tie
             <dd>7–14 business days after supplier confirmation</dd>
             <dt className="text-muted">Max obtainable card value</dt>
             <dd>${usdcBaseUnitsToDisplayString(tier.procurementPriceCapUsdcBaseUnits)}</dd>
+            <dt className="text-muted">Bonus flip</dt>
+            <dd>4% chance of a second card on every opening</dd>
           </dl>
 
           {isLocked ? (
